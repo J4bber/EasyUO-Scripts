@@ -1,0 +1,208 @@
+;=================================================================
+; Script Name: TrailMyx's Music/Peace trainer
+; Author: TrailMyx
+; Version: 4
+; Shard OSI / FS: OSI / FS OK
+; Revision Date: 9/29/2007
+; Purpose: Train music/peace AFK.  Give a guess for how long to completion
+; Globals:
+; Special Thanks:
+;
+;=================================================================
+; Disclaimer:  By running this script, you are accepting the contents of this licence agreement.
+; This script is only authorized to be distributed on www.scriptuo.com.  If you purchase this script,
+; acquire it from another website, it is not considered an authorized copy and should be deleted
+; immediately.
+; You hold the author, TrailMyx, and the distribution site www.scriptuo.com not liable for any loss of
+; items, accounts, monitary or time losses associated with the use of this script.  Furthermore, you promise
+; not to distribute or sell this script to anyone without the express permission of the author, Trailmyx.
+; Violation of the contents of this agreement will result in one of the following: litigation, www.scriptuo.com
+; account termination, discimination of bad karma for your next life, and most definitely causing a black mark
+; placed on your soul.
+;
+; I worked very hard to bring this script to you, so please use it responisibily and
+; respectfully.  If you have any questions, please reach me at trailmyx2@scriptuo.com.
+; (c) 2007 TrailMyx, All rights reserved.
+;
+; Thanks to quickd and Khameleon for the spellweaving scroll suggestion and info!
+; Thanks to Nobama for the Shame items information
+; Thanks again to Khameleon for all the good suggestions!
+; Thanks to computerdave for jewelry suggestion
+; Thanks to kabuto1 for blue container handing suggestion
+;===================================================================
+gosub showEUOMenu1
+set %music_gain 0
+gosub ConvertSkill %music_gain
+menu set EUOEdit1 #RESULT
+
+chooseskill MUSI
+gosub ConvertSkill #skill
+menu set EUOEdit2 #RESULT
+
+set %start_music_skill #skill
+set %current_music_skill #skill
+
+set %music_timer #SCNT
+set %start_music_time %music_timer
+set %music_gain_count 0
+set %music_target_skill 1000
+
+set %peace_gain 0
+gosub ConvertSkill %peace_gain
+menu set EUOEdit4 #RESULT
+
+chooseskill PEAC
+gosub ConvertSkill #skill
+menu set EUOEdit5 #RESULT
+
+set %start_peace_skill #skill
+set %current_peace_skill #skill
+
+set %peace_timer #SCNT
+set %start_peace_time %peace_timer
+set %peace_gain_count 0
+set %peace_target_skill 1000
+
+while #TRUE
+{
+  chooseskill MUSI
+  if %current_music_skill <> #skill
+  {
+    set %current_music_skill #skill
+    set %gain %current_music_skill - %start_music_skill
+    gosub ConvertSkill %gain
+    menu set EUOEdit1 #RESULT
+    gosub ConvertSkill #skill
+    menu set EUOEdit2 #RESULT
+    set %gain_time #SCNT
+    set %time_diff %gain_time - %start_music_time
+    set %music_gain_count %music_gain_count + 1
+    set %gains_left %music_target_skill - #SKILL
+    set %time_remaining ( ( ( %time_diff / %music_gain_count ) * %gains_left ) )
+    gosub ConvertTimeHourMinSec %time_remaining
+    menu set EUOEdit3 #RESULT
+  }
+  chooseskill PEAC
+  if %current_peace_skill <> #skill
+  {
+    set %current_peace_skill #skill
+    set %gain %current_peace_skill - %start_peace_skill
+    gosub ConvertSkill %gain
+    menu set EUOEdit4 #RESULT
+    gosub ConvertSkill #skill
+    menu set EUOEdit5 #RESULT
+    set %gain_time #SCNT
+    set %time_diff %gain_time - %start_peace_time
+    set %peace_gain_count %peace_gain_count + 1
+    set %gains_left %peace_target_skill - #SKILL
+    set %time_remaining ( ( ( %time_diff / %peace_gain_count ) * %gains_left ) )
+    gosub ConvertTimeHourMinSec %time_remaining
+    menu set EUOEdit6 #RESULT
+  }
+  gosub TrainMusicPeace #TRUE #TRUE
+  if #RESULT = #TRUE
+  {
+    display ok Out of instruments!
+    stop
+  }
+}
+
+sub TrainMusicPeace
+  namespace push
+  namespace local TMP
+  set !temp_lobjectid #LOBJECTID
+  set !temp_ltargetid #LTARGETID
+  set !temp_ltargetkind #LTARGETKIND
+  set !result #TRUE
+  if !music_timer = N/A
+  {
+    set !music_timer #SCNT
+    set !peace_timer #SCNT + 5
+  }
+  finditem PRF_LQF_MQF_QRF C_ , #BACKPACKID
+  if #FINDCNT > 0
+  {
+    set !result #FALSE
+    set #LOBJECTID #FINDID
+    if #SCNT > !music_timer && %1 = #TRUE
+    {
+      event macro 17 0
+      set !music_timer #SCNT + 8
+      wait 20
+    }
+    if #SCNT > !peace_timer && %2 = #TRUE
+    {
+      event macro 13 9
+      target 5s
+      event macro 23 0
+      set !peace_timer #SCNT + 11
+    }
+  }
+  else
+  {
+    display ok You are all out of instruments.
+    stop
+  }
+  set #LOBJECTID !temp_lobjectid
+  set #LTARGETID !temp_ltargetid
+  set #LTARGETKIND !temp_ltargetkind
+  set #RESULT !result
+  namespace pop
+return #RESULT
+;-------------------------------------------------------------------------------
+; %1 = input - Time to convert
+; #RESULT -  Time converted to #:##:## format
+sub ConvertTimeHourMinSec
+  namespace push
+  namespace local ctime
+  set !hourpart %1 / 3600
+  set !secpart ( %1 % 3600 ) % 60
+  set !minpart ( ( %1 % 3600 ) / 60 )
+
+  set #RESULT !hourpart , :
+  if !minpart < 10
+  {
+    set #RESULT #RESULT , 0
+  }
+  set #RESULT #RESULT , !minpart , :
+  if !secpart < 10
+  {
+    set #RESULT #RESULT , 0
+  }
+  set #RESULT #RESULT , !secpart
+  namespace pop
+return #RESULT
+;------------------------------------------------
+sub ConvertSkill
+  set %intpart %1 / 10
+  set %decpart %1 % 10
+  set #RESULT %intpart , #dot , %decpart
+return #RESULT
+;--------- EasyUO Menu Designer Code Begin ---------
+sub showEUOMenu1
+	menu Clear
+	menu Window Title TMGainer - Music/Peace
+	menu Window Color BtnFace
+	menu Window Size 290 48
+	menu Font Transparent #true
+	menu Font Align Right
+	menu Font Name MS Sans Serif
+	menu Font Size 8
+	menu Font Style 
+	menu Font Color WindowText
+	menu Font Transparent #false
+	menu Font Align Left
+	menu Text EUOLabel1 116 8 Gain
+	menu Text EUOLabel2 8 8 Musicianship
+	menu Text EUOLabel3 4 28 Peacemaking
+	menu Text EUOLabel4 116 28 Gain
+	menu Font BGColor Window
+	menu Edit EUOEdit1 152 4 33 33
+	menu Edit EUOEdit2 72 4 37 37
+	menu Edit EUOEdit3 216 4 61 ???
+	menu Edit EUOEdit5 72 24 37 37
+	menu Edit EUOEdit4 152 24 33 33
+	menu Edit EUOEdit6 216 24 61 ???
+	menu Show 421 270
+return
+;--------- EasyUO Menu Designer Code End ---------

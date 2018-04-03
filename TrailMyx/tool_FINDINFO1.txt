@@ -1,0 +1,113 @@
+;=================================================================
+; Script Name: TrailMyx's FINDINFO Item Information
+; Author: TrailMyx
+; Version: 1.0
+; Shard OSI / FS: OSI / FS OK
+; Revision Date: 9/29/2007
+; Purpose: Grabs an items property and displays for cut/paste purposes.
+;      __  __  __  __  __  __  __
+; http://www.scriptuo.com
+;=================================================================
+set #LPC 100
+gosub showEUOMenu1
+set #MENUBUTTON N/A
+set %lines 0
+loop1:
+  if #MENUBUTTON = EUOButton1
+  {
+    set #MENUBUTTON N/A
+    set #TARGCURS 1
+    repeat
+    until #TARGCURS = 0
+    finditem #LTARGETID *
+    if #FINDKIND <> -1
+    {
+      event property #FINDID
+      menu set EUOEdit1 #FINDTYPE
+      menu set EUOEdit2 #FINDID
+      menu set EUOEdit3 #FINDCOL
+      menu set EUOEdit4 #FINDX
+      menu set EUOEdit5 #FINDY
+      menu set EUOEdit6 #FINDZ
+      menu set EUOEdit7 #FINDREP
+      menu set EUOEdit8 #PROPERTY
+      set %text # , FINDTYPE: , #SPC , #FINDTYPE
+      menu list add EUOListBox1 %text
+      set %text # , FINDID: , #SPC , #FINDID
+      menu list add EUOListBox1 %text
+      set %text # , FINDCOL: , #SPC , #FINDCOL
+      menu list add EUOListBox1 %text
+      
+      set %text # , FINDX: , #SPC , #FINDX
+      menu list add EUOListBox1 %text
+      set %text # , FINDY: , #SPC , #FINDY
+      menu list add EUOListBox1 %text
+      set %text # , FINDZ: , #SPC , #FINDZ
+      menu list add EUOListBox1 %text
+      set %text # , FINDREP: , #SPC , #FINDREP
+      menu list add EUOListBox1 %text
+
+      set %property #PROPERTY
+      set %text Property:
+      menu list add EUOListBox1 %text
+      loop2:
+        str pos %property $ 1
+        if #STRRES <> 0
+        {
+          set %len #STRRES
+          set #STRRES #STRRES - 1
+          str left %property #STRRES
+          menu list add EUOListBox1 #STRRES
+          str del %property 1 %len
+          set %property #STRRES
+          set %lines %lines + 1
+          goto loop2
+        }
+        menu list add EUOListBox1 --------------------------------------------
+        set %lines %lines + 9
+        menu list select EUOListBox1 %lines
+    }
+  }
+  goto loop1
+
+;--------- EasyUO Menu Designer Code Begin ---------
+sub showEUOMenu1
+	menu Clear
+	menu Window Title TM's FINDINFO
+	menu Window Color BtnFace
+	menu Window Size 501 240
+	menu Font Transparent #true
+	menu Font Align Right
+	menu Font Name MS Sans Serif
+	menu Font Size 8
+	menu Font Style
+	menu Font Color WindowText
+	menu Font Transparent #false
+	menu Font Align Left
+	menu Text EUOLabel1 440 60 FINDTYPE
+	menu Text EUOLabel2 440 80 FINDID
+	menu Text EUOLabel3 440 100 FINDCOL
+	menu Text EUOLabel4 440 200 PROPERTY
+	menu Text EUOLabel5 440 120 FINDX
+	menu Text EUOLabel6 440 140 FINDY
+	menu Text EUOLabel7 440 160 FINDZ
+	menu Text EUOLabel8 440 180 FINDREP
+	menu Font BGColor Window
+	menu List Create EUOListBox1 4 4 305 233
+	menu Font BGColor BtnFace
+	menu Button EUOButton1 364 8 87 41 Find
+	menu Font BGColor Window
+	menu Edit EUOEdit1 316 56 121
+	menu Edit EUOEdit2 316 76 121
+	menu Edit EUOEdit3 316 96 121
+	menu Edit EUOEdit4 316 116 121
+	menu Edit EUOEdit5 316 136 121
+	menu Edit EUOEdit6 316 156 121
+	menu Edit EUOEdit7 316 176 121
+	menu Edit EUOEdit8 316 196 121
+	menu Show 421 270
+return
+;--------- EasyUO Menu Designer Code End ---------
+
+
+

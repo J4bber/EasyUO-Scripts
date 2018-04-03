@@ -1,0 +1,135 @@
+;=================================================================
+; Script Name: TrailMyx's Skill Monitor
+; Author: TrailMyx
+; Version: 1
+; Shard OSI / FS: OSI / FS OK
+; Revision Date: 9/29/2007
+; Purpose: Adjust %skill with skll value you'd like to monitor.  Watch the Gain and estimated time to max (%target_skill)
+; Globals:
+; Special Thanks:
+;
+;=================================================================
+; Disclaimer:  By running this script, you are accepting the contents of this licence agreement.
+; This script is only authorized to be distributed on www.scriptuo.com.  If you purchase this script,
+; acquire it from another website, it is not considered an authorized copy and should be deleted
+; immediately.
+; You hold the author, TrailMyx, and the distribution site www.scriptuo.com not liable for any loss of
+; items, accounts, monitary or time losses associated with the use of this script.  Furthermore, you promise
+; not to distribute or sell this script to anyone without the express permission of the author, Trailmyx.
+; Violation of the contents of this agreement will result in one of the following: litigation, www.scriptuo.com
+; account termination, discimination of bad karma for your next life, and most definitely causing a black mark
+; placed on your soul.
+;
+; I worked very hard to bring this script to you, so please use it responisibily and
+; respectfully.  If you have any questions, please reach me at trailmyx2@scriptuo.com.
+; (c) 2007 TrailMyx, All rights reserved.
+;
+;======================================================================
+;------------------------  User changes here  -------------------------
+;----------------------------------------------------------------------
+set %skill heal
+set %target_skill 1000
+;----------------------------------------------------------------------
+;-----------------    Don't change below this line   ------------------
+;======================================================================
+
+gosub showEUOMenu1
+
+menu delete EUOLabel2
+menu Text EUOLabel2 1 8 %skill
+
+chooseskill %skill
+set %gain 0
+gosub ConvertSkill %gain
+menu set EUOEdit1 #RESULT
+
+gosub ConvertSkill #skill
+menu set EUOEdit2 #RESULT
+
+set %start_skill #skill
+set %current_skill #skill
+set %start_time #SCNT
+set %last_skill #SKILL
+repeat
+  if %last_skill <> #SKILL
+  {
+    gosub TM_UpdateSkillGain %start_skill %target_skill %start_time %skill EUOEdit1 EUOEdit2 EUOEdit3
+    set %last_skill #SKILL
+  }
+until #FALSE
+;-------------------------------------------------------------------------------
+;-------------------------------------------------
+sub TM_UpdateSkillGain
+  namespace push
+  namespace local USG
+  set !start_skill %1
+  set !target_skill %2
+  set !start_time %3
+  set !skillname %4
+  set !control1 %5
+  set !control2 %6
+  set !control3 %7
+  chooseskill !skillname
+  set !current_skill #skill
+  set !gain !current_skill - !start_skill
+  gosub ConvertSkill !gain
+  menu set !control1 #RESULT
+  gosub ConvertSkill !current_skill
+  menu set !control2 #RESULT
+  set !gain_time #SCNT
+  set !time_diff !gain_time - !start_time
+  set !gain_count !gain_count + 1
+  set !gains_left !target_skill - !current_skill
+  set !time_remaining ( ( ( !time_diff / !gain_count ) * !gains_left ) )
+  gosub ConvertTimeHourMinSec !time_remaining
+  menu set !control3 #RESULT
+  namespace pop
+return
+;-------------------------------------------------------------------------------
+; %1 = input - Time to convert
+; #RESULT -  Time converted to #:##:## format
+sub ConvertTimeHourMinSec
+  namespace push
+  namespace local ctime
+  set !hourpart %1 / 3600
+  set !secpart ( %1 % 3600 ) % 60
+  set !minpart ( ( %1 % 3600 ) / 60 )
+
+  set #RESULT !hourpart , :
+  if !minpart < 10
+    set #RESULT #RESULT , 0
+  set #RESULT #RESULT , !minpart , :
+  if !secpart < 10
+    set #RESULT #RESULT , 0
+  set #RESULT #RESULT , !secpart
+  namespace pop
+return #RESULT
+;------------------------------------------------
+sub ConvertSkill
+  set %intpart %1 / 10
+  set %decpart %1 % 10
+  set #RESULT %intpart , #dot , %decpart
+return #RESULT
+;--------- EasyUO Menu Designer Code Begin ---------
+sub showEUOMenu1
+	menu Clear
+	menu Window Title TMGainer - Skill Monitor
+	menu Window Color BtnFace
+	menu Window Size 266 29
+	menu Font Transparent #true
+	menu Font Align Right
+	menu Font Name MS Sans Serif
+	menu Font Size 8
+	menu Font Style
+	menu Font Color WindowText
+	menu Font Transparent #false
+	menu Font Align Left
+	menu Text EUOLabel1 80 8 Gain
+	menu Text EUOLabel2 1 8 Skill
+	menu Font BGColor Window
+	menu Edit EUOEdit1 112 4 33 ???
+	menu Edit EUOEdit2 38 4 37 ???
+	menu Edit EUOEdit3 176 4 61 ???
+	menu Show 421 270
+return
+;--------- EasyUO Menu Designer Code End ---------

@@ -1,0 +1,750 @@
+;===========================================
+; Script Name: XIIxOveR's T-Hunter Helper
+; Author: XIIxOveR
+; Version: 1.01 Public Beta
+; Shard OSI/FS: OSI
+; Revision Date: September, 2010
+; Purpose: Help the Treasure Hunter with PITA tasks
+;=========================================================================
+set %mWait 10
+set %lWait 20
+set %DigToolTypes WWF_QPF_TWF_NPF
+set %MapTypes XVH
+set %LockPickTypes NWH
+;=========================================================================
+gosub DisplayTMapMenu
+set #menubutton n/a
+
+repeat
+   if #menubutton <> n/a
+      {
+      gosub #menubutton
+      set #menubutton n/a
+      }
+   menu get XIIxTMapLP
+   if #menures = #TRUE
+      gosub XIIxTMapLPCnt
+until #FALSE
+
+;####################
+;SUB Help
+;####################
+sub XIIxTMapHelp
+   Display XIIxOveR's T-Hunter Helper User Guide$
+      + 1) Sort Maps:$
+      + , #spc , #spc , #spc , Sorts a container of mixed tmaps into separate containers. Target a$
+      + , #spc , #spc , #spc , container of maps then target each container the maps should be sorted$
+      + , #spc , #spc , #spc , into then press "Start"$
+      + 2) Decode:$
+      + , #spc , #spc , #spc , Automatically decodes a container of maps. You MUST have the correct$
+      + , #spc , #spc , #spc , skill to decode the maps in the targeted container or the script will$
+      + , #spc , #spc , #spc , attempt to decode indefinitely$
+      + 3) Unlock:$
+      + , #spc , #spc , #spc , Simply target a locked trunk and the script will repeatedly attempt$
+      + , #spc , #spc , #spc , to unlock it until successful or lockpicks are gone. You MUST have the$
+      + , #spc , #spc , #spc , correct skill to unlock the targeted trunk or the script will attempt$
+      + , #spc , #spc , #spc , indefinitely.$
+      + 4) Find Map:$
+      + , #spc , #spc , #spc , This option scans all the tiles in a radius around the toon looking$
+      + , #spc , #spc , #spc , for the map dig location. To use, place the character in the area you$
+      + , #spc , #spc , #spc , expect to find the map and press the button, select the map to dig up.$
+      + , #spc , #spc , #spc , Once found the toon should attempt to pathfind to the correct dig$
+      + , #spc , #spc , #spc , location (still in progress).$
+      + 5) Training Options:$
+      + , #spc , #spc , #spc ,  These options simply call the XIIxOveR Lockpicking or Cartography$
+      + , #spc , #spc , #spc ,  training scripts. The path settings must be configured manually and$
+      + , #spc , #spc , #spc ,  correctly at the beginning of this script.$
+      + 6) Cancel - Cancels an action in progress.$
+      + 7) Help - Displays this help message.$
+return
+
+;####################
+;SUB XIIxTMapDecode
+;####################
+sub XIIxTMapDecode
+   set #targcurs 1
+   while #targcurs = 1
+      wait 1
+   set %CurrentContainer #ltargetID
+
+   event property %CurrentContainer
+   if /125 NOTIN #Property
+      {
+      Display That does not seem to be a container. Operation cancelled.
+      set %CurrentContainer
+      return
+      }
+   set #lobjectID %CurrentContainer
+   set #nextcposx 10
+   set #nextcposy 10
+   event macro 17
+   gosub XIIxGumpWait container_gump
+   
+   repeat
+      finditem %MapTypes C_ , %CurrentContainer
+      if #findkind <> -1
+         {
+         Set %CurrentMap #findid
+         event property %CurrentMap
+         if Tattered NOTIN #Property
+            ignoreitem %CurrentMap Maps
+         else
+            {
+            set %jIndexValue #jindex + 1
+            set #lobjectid %CurrentMap
+            repeat
+               event macro 17
+               wait %lWait
+               if #jindex >= %jIndexValue
+                  {
+                  for %i %jIndexValue #jindex
+                     {
+                     scanjournal %i
+                     if You_successfully_decode in #journal || if the_treasure_is_marked in #journal
+                        {
+                        gosub XIIxGumpWait course_gump
+                        set %Success #TRUE
+                        set %clickx #contposx + 50
+                        set %clicky #contposy + 50
+                        click %clickx %clicky r ;close tmap gump
+                        wait %mWait
+                        ignoreitem %Map Map
+                        }
+                     }
+                  }
+               wait %mWait
+            until %Success #TRUE
+            }
+         if #menubutton = XIIxTMapCancel
+            return
+         }
+   until #findkind = -1
+
+   Display Container Decoded!
+   ignoreitem reset Maps
+return
+
+;####################
+;SUB XIIxTMapUnlock
+;####################
+sub XIIxTMapUnlock
+   set %jIndexValue #jindex + 1
+   set %Locked #TRUE
+
+   ;Display Select trunk to unlock.
+   set #targcurs 1
+   while #targcurs = 1
+      wait 1
+   set %CurrentTrunk #ltargetID
+   
+   while %Locked
+      {
+      finditem %LockpickTypes C
+      if #findkind = -1
+         {
+         display You seem to be out of lockpicks, operation cancelled.
+         return
+         }
+      set #lobjectid #findid
+      event macro 17
+      target 3s
+
+      finditem %CurrentTrunk
+      if #findkind = -1
+         {
+         display Your box is gone! Script halting.
+         halt
+         }
+      set #LTARGETID #findid
+      set #ltargetkind 1
+      event macro 22 0
+      wait %lWait
+
+      if #jindex >= %jIndexValue
+         {
+         for %i %jIndexValue #jindex
+            {
+            scanjournal %i
+            if :_The_Lock_Quickly_Yields in #journal || if This_does_not_appear_to_be_locked in #journal
+               {
+               set %Locked #FALSE
+               return
+               }
+            }
+         if #menubutton = XIIxTMapCancel
+            return
+         if XIIxTMapLP = #TRUE
+            gosub XIIxTMapLPCnt
+         }
+      }
+return
+
+;####################
+;SUB XIIxTMapSort
+;####################
+sub XIIxTMapSort
+   gosub DisplayTMapSortMenu
+   set %ContSource n/a
+   set %ContLevel1 n/a
+   set %ContLevel2 n/a
+   set %ContLevel3 n/a
+   set %ContLevel4 n/a
+   set %ContLevel5 n/a
+   set %ContLevel6 n/a
+   set #menubutton n/a
+
+   Display Select a source container with maps needing to be sorted and target containers for any map&
+      + levels you are sorting. Map levels without a matching target container will be ignored!
+      
+   repeat
+      if #menubutton = XIIxTMapCancel
+         {
+         gosub DisplayTMapMenu
+         return
+         }
+      if #menubutton = XIIxTmapSource
+         {
+         Display Select container of treasure maps to sort.
+         set #targcurs 1
+         while #targcurs = 1
+            wait 1
+         Set %ContSource #ltargetid
+         
+         gosub XIIxPropertyCheck %ContSource /125
+         if #RESULT = #FALSE
+            {
+            Display That does not seem to be a container. Try again.
+            set %ContSource n/a
+            }
+         else
+            {
+            set #lobjectID %ContSource
+            set #nextcposx 10
+            set #nextcposy 10
+            event macro 17
+            gosub XIIxGumpWait container_gump
+
+            finditem %MapTypes C_ , %ContSource
+            if #findkind = -1
+               {
+               Display There does not seem to be any maps to sort in that container.
+               set %ContSource n/a
+               }            
+            else
+               menu set XIIxTmapSourceVal #findid
+            set #menubutton n/a
+            }
+         }
+         
+      if #menubutton = XIIxTmapSort1
+         {
+         Display Select container for Plainly Drawn (level 1) maps.
+         set #targcurs 1
+         while #targcurs = 1
+            wait 1
+         set %ContLevel1 #ltargetID
+         gosub XIIxPropertyCheck %ContLevel1 /125
+         if #RESULT = #FALSE
+            {
+            Display That does not seem to be a container. Try again.
+            set %ContLevel1 n/a
+            }
+         else
+            menu set XIIxTmapSort1Val %ContLevel1
+         set #menubutton n/a
+         }
+
+      if #menubutton = XIIxTmapSort2
+         {
+         Display Select container for Adeptly Drawn (level 2) maps.
+         set #targcurs 1
+         while #targcurs = 1
+            wait 1
+         set %ContLevel2 #ltargetID
+         gosub XIIxPropertyCheck %ContLevel2 /125
+         if #RESULT = #FALSE
+            {
+            Display That does not seem to be a container. Try again.
+            set %ContLevel2 n/a
+            }
+         else
+            menu set XIIxTmapSort2Val %ContLevel2
+         set #menubutton n/a
+         }
+
+      if #menubutton = XIIxTmapSort3
+         {
+         Display Select container for Expertly Drawn (level 3) maps.
+         set #targcurs 1
+         while #targcurs = 1
+            wait 1
+         set %ContLevel3 #ltargetID
+         gosub XIIxPropertyCheck %ContLevel3 /125
+         if #RESULT = #FALSE
+            {
+            Display That does not seem to be a container. Try again.
+            set %ContLevel3 n/a
+            }
+         else
+            menu set XIIxTmapSort3Val %ContLevel3
+         set #menubutton n/a
+         }
+
+      if #menubutton = XIIxTmapSort4
+         {
+         Display Select container for Cleverly Drawn (level 4) maps.
+         set #targcurs 1
+         while #targcurs = 1
+            wait 1
+         set %ContLevel4 #ltargetID
+         gosub XIIxPropertyCheck %ContLevel4 /125
+         if #RESULT = #FALSE
+            {
+            Display That does not seem to be a container. Try again.
+            set %ContLevel4 n/a
+            }
+         else
+            menu set XIIxTmapSort4Val %ContLevel4
+         set #menubutton n/a
+         }
+
+      if #menubutton = XIIxTmapSort5
+         {
+         Display Select container for Deviously Draw (level 5) maps.
+         set #targcurs 1
+         while #targcurs = 1
+            wait 1
+         set %ContLevel5 #ltargetID
+         gosub XIIxPropertyCheck %ContLevel5 /125
+         if #RESULT = #FALSE
+            {
+            Display That does not seem to be a container. Try again.
+            set %ContLevel5 n/a
+            }
+         else
+            menu set XIIxTmapSort5Val %ContLevel5
+         set #menubutton n/a
+         }
+
+      if #menubutton = XIIxTmapSort6
+         {
+         Display Select container for Ingeniously Drawn (level 6) maps.
+         set #targcurs 1
+         while #targcurs = 1
+            wait 1
+         set %ContLevel6 #ltargetID
+         gosub XIIxPropertyCheck %ContLevel6 /125
+         if #RESULT = #FALSE
+            {
+            Display That does not seem to be a container. Try again.
+            set %ContLevel6 n/a
+            }
+         else
+            menu set XIIxTmapSort6Val %ContLevel6
+         set #menubutton n/a
+         }         
+   until #menubutton = XIIxTMapSortStart && %ContSource <> n/a
+
+   menu Delete XIIxTmapSortStart
+   menu Font BGColor BtnFace
+   menu Font Color WindowText
+   menu button Pause 340 92 40 25 Pause
+   
+   repeat
+      finditem %MapTypes C_ , %ContSource
+      if #findkind <> -1
+         {
+         set %CurrentContainer n/a
+         set %CurrentMap #findid
+         event property %CurrentMap
+         if Plainly in #Property && %ContLevel1 <> n/a
+            set %CurrentContainer %ContLevel1
+         if Expertly in #Property && %ContLevel2 <> n/a
+            set %CurrentContainer %ContLevel2
+         if Adeptly in #Property && %ContLevel3 <> n/a
+            set %CurrentContainer %ContLevel3
+         if Cleverly in #Property && %ContLevel4 <> n/a
+            set %CurrentContainer %ContLevel4
+         if Deviously in #Property && %ContLevel5 <> n/a
+            set %CurrentContainer %ContLevel5
+         if Ingeniously in #Property && %ContLevel6 <> n/a
+            set %CurrentContainer %ContLevel6
+            
+         if %CurrentContainer <> n/a
+            gosub XIIxMoveStuff %CurrentMap %ContSource 1 %CurrentContainer
+            
+         ignoreitem %CurrentMap
+         if #menubutton = Pause
+            gosub XIIxPause 340 92 40 25 Pause
+         }
+   until #findkind = -1
+   Display Sort complete!
+   ignoreitem reset
+   gosub DisplayTMapMenu
+return
+
+;####################
+;SUB XIIxTMapTrainCart
+;####################
+sub XIIxTMapTrainCart
+   Display Sorry, function not yet available.
+return
+
+;####################
+;SUB XIIxTMapTrainLP
+;####################
+sub XIIxTMapTrainLP
+   Display Sorry, function not yet available.
+return
+
+;####################
+;SUB XIIxTMapFindMap
+;####################
+; Attempts to dig for a map in a radius around the character
+; Stops when discovers the correct map location
+sub XIIxTMapFindMap
+   set #RESULT
+   repeat
+      event sysmessage Select Map to dig up.
+      set #targcurs 1
+      while #targcurs = 1
+         wait 1
+      set %CurrentMap #ltargetID
+      FindItem %CurrentMap C_ , #backpackid
+      if #FindType NOTIN %MapTypes
+         {
+         Display That is not a map! Execution cancelled.
+         return
+         }
+      if #Findkind = -1
+         {
+         Display That map does not seem to be in your backpack. Execution cancelled.
+         return
+         }
+      event property %CurrentMap
+      if Completed_By IN #PROPERTY
+         {
+         Display That map has already been completed. Execution cancelled.
+         return         
+         }
+      if Drawn_Treasure_Map NOTIN #property && Blessed NOTIN #property
+         {
+         Display That seems to be a standard map or simply is not a treasure map. Execution cancelled.
+         return         
+         }
+      set #RESULT #TRUE
+   until #RESULT = #TRUE
+
+;-----Begin Map Scan-----;
+   set %dx #charposx - 3
+   set %dy #charposy - 3
+
+   for %a 1 7
+      {
+      for %b 1 7
+         {
+         tile init
+         tile cnt %dx %dy
+         for %c 1 #tilecnt
+            {
+            tile get %dx %dy %c
+            gosub CheckIt %dx %dy #tilez
+            if %NextTile <> #FALSE
+               goto _next_tile
+            if %NextTile = #FALSE
+               {
+               event sysmessage Map location found at %tilex ,  x  , %tiley ,  x  , %tilez
+               event pathfind %tilex %tiley %tilez
+               return
+               }
+            }
+         _next_tile:
+         set %dy %dy + 1
+         if #menubutton = XIIxTMapCancel
+            return
+         }
+      set %dy #charposy - 2
+      set %dx %dx + 1
+      }
+return
+
+;####################
+;SUB CheckIt
+;####################
+;Sub required by FindMap process
+;%1 Tile X location
+;%2 Tile Y location
+;%3 Tile Z location
+sub CheckIt
+   set %tilex %1
+   set %tiley %2
+   set %tilez %3
+   set #ltargetx %tilex
+   set #ltargety %tiley
+   set #ltargetz %tilez
+   set %NextTile
+
+   set %jIndexValue #jindex
+   exevent popup %CurrentMap
+   gosub XIIxGumpWait normal_gump normal_gump 125_60
+   gosub XIIxClickNWait 50 40 #FALSE
+   target 3s
+   set #ltargetkind 2
+   event macro 22
+   wait %mWait
+
+   if #jindex > %jIndexValue
+      {
+      for %i %jIndexValue #jindex
+         {
+         scanjournal %i
+         if you_dig_and_dig in #journal || That_is_too_far in #journal
+            set %NextTile #TRUE
+         if something_is_preventing in #journal || The_chest_can't_be in #journal
+            set %NextTile #FALSE
+         }
+      }
+   if #jindex = %jIndexValue
+      set %NextTile #FALSE
+return
+
+;####################
+;SUB XIIxTMapLPCnt
+;####################
+sub XIIxTMapLPCnt
+   menu get XIIxTMapLPVal
+   set %MinLPs #menures
+   finditem %LockPickTypes C_ , #backpackid
+   if #findstack < %MinLPs
+      event sysmessage WARNING: You only have #findstack lockpicks remaining!!
+   wait %lWait      
+return
+
+;#######################
+;SUB XIIxPause
+;#######################
+; %1 = Button position 1
+; %2 = Button position 2
+; %3 = Button position 3
+; %4 = Button position 4
+; %5 = Button Name
+; e.g. "gosub pause 340 92 40 25 Pause"
+Sub XIIxPause
+   namespace push
+   namespace local XIIxPause
+   set !1 %1
+   set !2 %2
+   set !3 %3
+   set !4 %4
+   set !5 %5
+   menu set Status Status: Paused
+   menu delete !5
+   menu Font BGColor BtnFace
+   menu Font Color WindowText
+   menu button resume !1 !2 !3 !4 Resume
+   set #menubutton N/A
+   while #menubutton <> Resume
+      wait 1
+   menu delete resume
+   menu Font BGColor BtnFace
+   menu Font Color WindowText
+   menu Button !5 !1 !2 !3 !4 !5
+   menu set Status Status: Working...
+   namespace pop
+Return
+
+;#######################
+;SUB XIIxPropertyCheck
+;#######################
+; %1 = ID of Object to check
+; %2 = Propert value to look for
+; Returns #TRUE if property is matched, #FALSE if not
+sub XIIxPropertyCheck
+   namespace push
+   namespace local XIIxProperty
+   set !Object %1
+   set !Property %2
+   event property !Object
+   if !Property in #property
+      {
+      set #RESULT #TRUE
+      namespace pop
+      return #RESULT
+      }
+return #FALSE
+
+;#######################
+;SUB XIIxMoveStuff
+;#######################
+; %1 ItemType or ID to move
+; %2 Container to move from
+; %3 Number of items to move
+; %4 Container to move to
+; Returns #FALSE if item to move is not found or #TRUE if successful
+sub XIIxMoveStuff
+   Namespace Push
+   Namespace Local nsXIIxMoveStuff
+   set !Item2Move %1
+   set !SourceContainer %2
+   set !Amount2Move %3
+   set !TargetContainer %4
+   set !sWait 10
+   
+   finditem !Item2Move C_ , !SourceContainer
+   if #findkind = -1
+      {
+      namespace clear
+      NameSpace Pop
+      Return #FALSE
+      }
+   if #findstack < !Amount2Move
+      set !Amount2Move #findstack
+   exevent drag #findid !Amount2Move
+   wait !sWait
+   exevent dropc !TargetContainer
+   wait !sWait
+   namespace clear
+   Namespace Pop
+return #TRUE
+
+;#######################
+;SUB XIIxClickNWait
+;#######################
+; %1 = Required: Xoffset
+; %2 = Required: Yoffset
+; %3 = Required: #TRUE to wait for gump, any other value to return after click
+; %4 = Required if %3 is #TRUE: Gump_Name
+; %5 = Required if %3 is #TRUE: Gump_Size
+sub XIIxClickNWait
+   namespace push
+   namespace local nsXIIxClickNWait
+   set !clickx #contposx + %1
+   set !clicky #contposy + %2
+   set !gName1 %4
+   set !gName2 %4
+   set !gSize %5
+   click !clickx !clicky
+   if %3 <> #TRUE
+      {
+      namespace clear
+      namespace pop
+      return
+      }
+   if %0 > 3
+      gosub XIIxGumpWait !gName1 !gName2 !gSize
+   namespace clear
+   namespace pop
+return
+
+;#######################
+;SUB XIIxGumpWait
+;#######################
+; %1 = Required: Gumpname 1
+; %2 = Required only if using Gumpsize: Gumpname 2
+; %3 = Optional: Gumpsize
+; Returns #TRUE if gump occured before timeout, #FALSE if timeout occured
+sub XIIxGumpWait
+   namespace push
+   namespace local nsXIIxGumpWait
+   wait 10
+   set !gName1 %1
+   set !gName2 %2
+   set !gSize %3
+   set !_time #SCNT
+   while #SCNT <= !_time + 5
+      {
+      if %0 > 2
+         {
+         if ( #CONTNAME = !gName1 && #CONTSIZE = !gSize ) || ( #CONTNAME = !gName2 && #CONTSIZE = !gSize )
+            {
+            namespace clear
+            namespace pop
+            return #TRUE
+            }
+         }
+      else
+         {
+         if #CONTNAME = !gName1 || #CONTNAME = !gName2
+            { 
+            namespace clear
+            namespace pop
+            return #TRUE
+            }
+         }
+      }
+   namespace clear
+   namespace pop
+return #FALSE
+
+;#######################
+;SUB DisplayTMapMenu
+;#######################
+sub DisplayTMapMenu
+	menu Clear
+	menu Window Title XIIxOveR's T-Mapper Helper
+	menu Window Color Black
+	menu Window Size 710 35
+	menu Font Transparent #true
+	menu Font Align Right
+	menu Font Name MS Sans Serif
+	menu Font Size 7
+	menu Font Style 
+	menu Font Color WindowText
+	menu Button XIIxTMapSort 5 5 70 25 Sort Maps
+	menu Button XIIxTMapDecode 80 5 65 25 Decode
+	menu Button XIIxTMapUnlock 150 5 65 25 Unlock
+	menu Button XIIxTMapFindMap 220 5 65 25 Find Map
+	menu Button XIIxTMapTrainLP 360 5 65 25 Train LP
+	menu Button XIIxTMapTrainCart 430 5 75 25 Train Cart
+	menu Button XIIxTmapCancel 570 5 65 25 Cancel
+	menu Button XIIxTmapHelp 640 5 65 25 Help
+	menu Check XIIxTMapLP 292 8 17 17 #false
+	menu Font BGColor Window
+	menu Edit XIIxTMapLPVal 312 8 37 10
+	menu Show 700 10
+return
+
+;#######################
+;SUB DisplayTMapSortMenu
+;#######################
+sub DisplayTMapSortMenu
+	menu Clear
+	menu Window Title XIIxOveR's T-Mapper Helper
+	menu Window Color Black
+	menu Window Size 710 125
+	menu Font Transparent #true
+	menu Font Align Right
+	menu Shape EUOShape1 9 40 690 3 3 7 1 Black 7 White
+	menu Font Name MS Sans Serif
+	menu Font Size 7
+	menu Font Style 
+	menu Font Color WindowText
+	menu Button XIIxTMapSort 5 5 70 25 Sort Maps
+	menu Button XIIxTMapDecode 80 5 65 25 Decode
+	menu Button XIIxTMapUnlock 150 5 65 25 Unlock
+	menu Button XIIxTMapFindMap 220 5 65 25 Find Map
+	menu Button XIIxTMapTrainLP 360 5 65 25 Train LP
+	menu Button XIIxTMapTrainCart 430 5 75 25 Train Cart
+	menu Button XIIxTmapCancel 570 5 65 25 Cancel
+	menu Button XIIxTmapHelp 640 5 65 25 Help
+	menu Button XIIxTmapSource 5 52 70 25 Source
+	menu Button XIIxTMapSort1 149 52 25 25 1
+	menu Button XIIxTMapSort2 245 52 25 25 2
+	menu Button XIIxTMapSort3 341 52 25 25 3
+	menu Button XIIxTMapSort4 437 52 25 25 4
+	menu Button XIIxTMapSort5 533 52 25 25 5
+	menu Button XIIxTMapSort6 629 52 25 25 6
+	menu Button XIIxTMapSortStart 340 92 40 25 Sort!
+	menu Font Size 6
+	menu Font BGColor Window
+	menu Edit XIIxTMapSourceVal 80 52 49 -src-
+	menu Edit XIIxTMapSort6Val 656 52 49 -targ-
+	menu Edit XIIxTMapSort5Val 560 52 49 -targ-
+	menu Edit XIIxTMapSort4Val 464 52 49 -targ-
+	menu Edit XIIxTMapSort3Val 368 52 49 -targ-
+	menu Edit XIIxTMapSort2Val 272 52 49 -targ-
+	menu Edit XIIxTMapSort1Val 176 52 49 -targ-
+	menu Check XIIxTMapLP 292 8 17 17 #false
+	menu Edit XIIxTMapLPVal 312 8 37 10
+	menu Show 700 10
+return

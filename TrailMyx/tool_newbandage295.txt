@@ -1,0 +1,728 @@
+;=================================================================
+; Script Name: ScriptUO Healing Commander
+; Author: TrailMyx/Cerveza
+; Version: 2.95
+; Shard OSI / FS: OSI / FS OK
+; Revision Date: 9/29/2007
+; Purpose: Manages your healing needs by using journal scanning.
+; Globals:
+;   *TM_HEAL = #TRUE if healing targeting in progress.
+; Namespaces:
+;   TM_heal(local)
+;   TM_AdvJS_*
+;
+; Special Thanks:
+;   Cerveza for all his input and prompting me to get off my butt and finish this
+;   This is a showcase for the new journal handling subs.
+;=================================================================
+set %version 2.95
+gosub TM_HealSetup
+
+mainloop:
+  if #CHARNAME = N/A
+    gosub OpenStatusBar
+  menu get EUOCheckBox1
+  set !heal_bandage #MENURES
+  menu get EUOCheckBox3
+  set !heal_chivalry #MENURES
+  menu get EUOCheckBox2
+  set !heal_magery #MENURES
+  menu get EUOCheckBox4
+  set !heal_necromancy #MENURES
+
+  menu get EUOCheckBox5
+  set !cure_bandage #MENURES
+  menu get EUOCheckBox6
+  set !cure_magery #MENURES
+  menu get EUOCheckBox7
+  set !cure_chivalry #MENURES
+
+  menu get EUOEdit1
+  set !bandage_threshold #MENURES
+  menu get EUOEdit2
+  set !large_heal_threshold #MENURES
+  menu get EUOEdit3
+  set !small_heal_threshold #MENURES
+  
+  menu get EUOCheckOSIBandaging
+  set !OSI_bandaging #MENURES
+
+  if #TARGCURS = 0
+    set !targ_timer #SCNT + 8
+  
+  if #SCNT > !targ_timer && #TARGCURS = 1
+    key esc
+    
+  namespace copy TM_loot_in_progress from global TM_loot
+
+  if ( !heal_bandage || !cure_bandage ) && ( #TARGCURS <> 1 && #CHARGHOST <> yes && H notin #CHARSTATUS && !TM_loot_in_progress <> #TRUE )
+  {
+    finditem ZLF C_ , #BACKPACKID
+    if #FINDKIND <> -1
+    {
+      gosub TM_HealCheckBandaging
+    }
+  }
+  
+  if ( ( #HITS < ( #MAXHITS - !small_heal_threshold ) ) ) || ( C in #CHARSTATUS )
+  {
+    set *TM_HEAL_REQUEST #TRUE
+    set !TM_HEAL_REQUEST #TRUE
+  }
+  else
+  {
+    set *TM_HEAL_REQUEST #FALSE
+    set !TM_HEAL_REQUEST #FALSE
+  }
+
+  gosub StandingStill
+  if ( !heal_chivalry || !cure_chivalry ) && ( #TARGCURS <> 1 && #CHARGHOST <> yes && H notin #CHARSTATUS && !still && !TM_loot_in_progress <> #TRUE  )
+    gosub TM_HealCheckChivalry
+  gosub StandingStill
+  if ( !heal_magery || !cure_magery ) && ( #TARGCURS <> 1 && #CHARGHOST <> yes && H notin #CHARSTATUS && !still && !TM_loot_in_progress <> #TRUE  )
+    gosub TM_HealCheckMagery
+  gosub StandingStill
+  if ( !heal_necromancy = #TRUE ) && ( #TARGCURS <> 1 && #CHARGHOST <> yes && H notin #CHARSTATUS && !still && !TM_loot_in_progress <> #TRUE  )
+    gosub TM_HealCheckNecromancy
+  gosub StandingStill
+
+  if #MENUBUTTON = EUOButton1
+  {
+    set #MENUBUTTON N/A
+    gosub TM_SetPersistantVariable TM_HEAL_BANDAGE !heal_bandage
+    gosub TM_SetPersistantVariable TM_HEAL_CHIVALRY !heal_chivalry
+    gosub TM_SetPersistantVariable TM_HEAL_MAGERY !heal_magery
+    gosub TM_SetPersistantVariable TM_HEAL_NECROMANCY !heal_necromancy
+    gosub TM_SetPersistantVariable TM_CURE_BANDAGE !cure_bandage
+    gosub TM_SetPersistantVariable TM_CURE_CHIVALRY !cure_chivalry
+    gosub TM_SetPersistantVariable TM_CURE_MAGERY !cure_magery
+    gosub TM_SetPersistantVariable TM_HEAL_BANDAGE_THRESH !bandage_threshold
+    gosub TM_SetPersistantVariable TM_HEAL_LARGE_HEAL_THRESH !large_heal_threshold
+    gosub TM_SetPersistantVariable TM_HEAL_SMALL_HEAL_THRESH !small_heal_threshold
+    gosub TM_SetPersistantVariable TM_HEAL_OSI_BANDAGING !OSI_bandaging
+  }
+  if #CHARGHOST = yes
+    gosub TM_SetHealingIdle ; dead, must reset everything
+goto mainloop
+;------------------------------------------------------------
+sub StandingStill
+  set !newpos #CHARPOSX , #CHARPOSY , #CHARPOSZ
+  if !newpos <> !oldpos
+    set !still #FALSE
+  if #SCNT > !move_timer
+  {
+    if !oldpos = !newpos
+      set !still #TRUE
+    else
+      set !oldpos !newpos
+    set !move_timer #SCNT
+  }
+return
+;------------------------------------------------------------
+sub TM_HealSetup
+  namespace global TM_healer
+  set #LPC 100
+  set !bandaging #FALSE
+  set !mortally_wounded #FALSE
+  set !healing_busy #FALSE
+  set !healtimeout #SCNT
+  set !timeoutcount 0
+  set #MENUBUTTON N/A
+
+  gosub TM_AdvJournalSync heal 100
+  gosub TM_AdvJournalSync magery 100
+  gosub TM_AdvJournalSync chivalry 100
+  gosub TM_AdvJournalSync spellcast 100
+  gosub showEUOMenu1
+  gosub TM_GetPersistantVariable TM_HEAL_BANDAGE
+  menu set EUOCheckBox1 #RESULT
+  gosub TM_GetPersistantVariable TM_HEAL_CHIVALRY
+  menu set EUOCheckBox3 #RESULT
+  gosub TM_GetPersistantVariable TM_HEAL_MAGERY
+  menu set EUOCheckBox2 #RESULT
+  gosub TM_GetPersistantVariable TM_HEAL_NECROMANCY
+  menu set EUOCheckBox4 #RESULT
+
+  gosub TM_GetPersistantVariable TM_CURE_BANDAGE
+  menu set EUOCheckBox5 #RESULT
+  gosub TM_GetPersistantVariable TM_CURE_MAGERY
+  menu set EUOCheckBox6 #RESULT
+  gosub TM_GetPersistantVariable TM_CURE_CHIVALRY
+  menu set EUOCheckBox7 #RESULT
+  
+  gosub TM_GetPersistantVariable TM_HEAL_OSI_BANDAGING
+  menu set EUOCheckOSIBandaging #RESULT
+  set !OSI_bandaging #RESULT
+
+  gosub TM_GetPersistantVariable TM_HEAL_BANDAGE_THRESH
+  set !bandage_threshold #RESULT
+  if !bandage_threshold = N/A
+    set !bandage_threshold 10
+  menu set EUOEdit1 !bandage_threshold
+  gosub TM_GetPersistantVariable TM_HEAL_LARGE_HEAL_THRESH
+  set !large_heal_threshold #RESULT
+  if !large_heal_threshold = N/A
+    set !large_heal_threshold 40
+  menu set EUOEdit2 !large_heal_threshold
+  gosub TM_GetPersistantVariable TM_HEAL_SMALL_HEAL_THRESH
+  set !small_heal_threshold #RESULT
+  if !small_heal_threshold = N/A
+    set !small_heal_threshold 15
+  menu set EUOEdit3 !small_heal_threshold
+
+  set *TM_HEAL #FALSE
+  set !TM_HEAL #FALSE
+  set !move_timer #SCNT + 2
+  set !newpos #CHARPOSX , #CHARPOSY , #CHARPOSZ
+  set !newpos !oldpos
+  set !targ_timer #SCNT
+  set !still #TRUE
+  set %healingdelay 11 - #DEX / 20 + 4
+return
+;------------------------------------------------------------
+sub TM_GetPersistantVariable
+  set #RESULT %1 , _ , #CHARID
+  set #RESULT * . #RESULT
+return #RESULT
+;------------------------------------------------------------
+sub TM_SetPersistantVariable
+  set #RESULT %1 , _ , #CHARID
+  set * . #RESULT %2
+return
+;------------------------------------------------------------
+sub TM_SetHealingBusy
+  if !healing_busy = #FALSE
+  {
+	  menu Font Size 8
+	  menu Font Style
+    menu delete EUOShape3
+    menu delete EUOLabel6
+ 	  menu Shape EUOShape3 240 100 73 21 3 7 1 Black 7 Red
+	  menu Font BGColor Red
+	  menu Text EUOLabel6 268 103 Busy
+	  menu Font BGColor White
+  }
+  gosub TM_DisableAutoloot
+  set !healing_busy #TRUE
+  set *TM_HEAL #TRUE
+  set !TM_HEAL #TRUE
+return
+;------------------------------------------------------------
+sub TM_SetHealingIdle
+  if !healing_busy = #TRUE
+  {
+	  menu Font Size 8
+	  menu Font Style
+    menu delete EUOShape3
+    menu delete EUOLabel6
+ 	  menu Shape EUOShape3 240 100 73 21 3 7 1 Black 7 Lime
+	  menu Font BGColor Lime
+	  menu Text EUOLabel6 268 103 Idle
+	  menu Font BGColor White
+  }
+  gosub TM_EnableAutoloot
+  set !healing_busy #FALSE
+  set *TM_HEAL #FALSE
+  set !TM_HEAL #FALSE
+return
+;------------------------------------------------------------
+sub TM_HealCheckBandaging
+  namespace push
+  namespace global TM_healer
+  set !temp_ltargetid #LTARGETID
+  set !temp_lobjectid #LOBJECTID
+  set !temp_ltargetkind #LTARGETKIND
+HealCheckBandaging_loop1:
+  gosub TM_HealMortalStrikeCheck heal
+  if ( ( #HITS < ( #MAXHITS - !bandage_threshold ) ) ) || ( C in #CHARSTATUS && !cure_bandage ) ; use bandages
+  {
+    if !mortally_wounded = #TRUE
+      goto HealCheckBandaging_end1
+    if !bandaging = #FALSE ; otherwise still healing.
+    {
+      gosub TM_SetHealingBusy
+      finditem ZLF C_ , #BACKPACKID
+      if #FINDKIND <> -1
+      {
+        if !OSI_bandaging = #FALSE
+        {
+          set #LOBJECTID #FINDID
+          set !targ_timeout #SCNT + 5
+          event macro 17 0 ; last object, select bandages, wait until target comes up
+          HealCheckBandaging_loop2:
+            gosub TM_AdvJournalScan heal VALID you_must_wait ; another action messed up this
+            if #RESULT = #TRUE
+            {
+              gosub TM_AdvJournalSync heal
+              goto HealCheckBandaging_loop1
+            }
+            if #SCNT > !targ_timeout
+              goto HealCheckBandaging_loop1
+            if #TARGCURS <> 1
+              goto HealCheckBandaging_loop2
+
+          repeat   ; wait for target to change
+            set #LTARGETKIND 1
+            event macro 23 0 ; target self
+            wait 5
+          until #TARGCURS = 0
+        }
+        else
+        {
+           event macro 58 0 ; bandage self
+           wait 10
+        }
+        
+        set !targ_timeout #SCNT + 5
+        HealCheckBandaging_loop3:
+          gosub TM_AdvJournalScan heal VALID that_being_is_not cannot
+          if #RESULT = #TRUE || #SCNT > !targ_timeout
+          {
+            if #RESULT = #TRUE
+              gosub TM_AdvJournalSync heal
+            gosub TM_EnableAutoloot
+            set *TM_HEAL #FALSE
+            set !TM_HEAL #FALSE
+            goto HealCheckBandaging_end1
+          }
+          gosub TM_AdvJournalScan heal VALID you_begin_applying ; successful bandage start
+          if #RESULT = #TRUE
+          {
+            set !bandaging #TRUE
+            set !healtimeout #SCNT + %healingdelay
+            gosub TM_AdvJournalSync heal
+            wait 10
+            gosub TM_EnableAutoloot
+            set *TM_HEAL #FALSE
+            set !TM_HEAL #FALSE
+            goto HealCheckBandaging_end1
+          }
+          goto HealCheckBandaging_loop3
+      }
+    }
+  }
+  if !bandaging = #TRUE
+  {
+    gosub TM_AdvJournalScan heal VALID you_finish_applying you_apply_the you_heal_what_little the_bleeding_wounds that_being_is_not you_bind_the_wound
+    if #RESULT = #TRUE || #SCNT > !healtimeout
+    {
+      if #SCNT > !healtimeout
+      {
+        set !timeoutcount !timeoutcount + 1
+      }
+      set !bandaging #FALSE
+      set !mortally_wounded #FALSE
+      gosub TM_AdvJournalSync heal
+      gosub TM_SetHealingIdle
+    }
+  }
+  else
+  {
+     gosub TM_AdvJournalSync heal
+  }
+HealCheckBandaging_end1:
+  set #LTARGETID !temp_ltargetid
+  set #LOBJECTID !temp_lobjectid
+  set #LTARGETKIND !temp_ltargetkind
+  namespace pop
+return
+;------------------------------------------------------------
+sub TM_HealCheckMagery
+  namespace push
+  namespace global TM_healer
+  set !temp_ltargetid #LTARGETID
+  set !temp_lobjectid #LOBJECTID
+  set !temp_ltargetkind #LTARGETKIND
+  gosub TM_HealMortalStrikeCheck magery
+  if ( ( C in #CHARSTATUS && !cure_magery ) && !mortally_wounded = #FALSE ) && ( #MANA >= 4 )
+  {
+    gosub TM_SetHealingBusy
+    gosub TM_NewCastSpell 10 SELF 1 10 10 ;  cure
+    wait 5
+  }
+  if ( ( #HITS < ( #MAXHITS - !large_heal_threshold ) ) ) && ( C notin #CHARSTATUS && !mortally_wounded = #FALSE ) && ( #MANA >= 11 )   ; greater heal
+  {
+    gosub TM_SetHealingBusy
+    gosub TM_NewCastSpell 28 SELF 1 10 10 ;  greater heal
+    wait 5
+  }
+  if ( ( #HITS < ( #MAXHITS - !small_heal_threshold ) ) ) && ( C notin #CHARSTATUS && !mortally_wounded = #FALSE ) && ( #MANA >= 4 )   ; heal
+  {
+    gosub TM_SetHealingBusy
+    gosub TM_NewCastSpell 3 SELF 1 10 10 ;  heal
+    wait 5
+  }
+  if !bandaging = #FALSE
+    gosub TM_SetHealingIdle
+  set *TM_HEAL #FALSE
+  set !TM_HEAL #FALSE
+  set #LTARGETID !temp_ltargetid
+  set #LOBJECTID !temp_lobjectid
+  set #LTARGETKIND !temp_ltargetkind
+  gosub TM_AdvJournalSync magery
+  namespace pop
+return
+;------------------------------------------------------------
+sub TM_HealCheckChivalry
+  namespace push
+  namespace global TM_healer
+  set !temp_ltargetid #LTARGETID
+  set !temp_lobjectid #LOBJECTID
+  set !temp_ltargetkind #LTARGETKIND
+  gosub TM_HealMortalStrikeCheck chivalry
+  if ( ( C in #CHARSTATUS && !cure_chivalry ) && !mortally_wounded = #FALSE ) && ( #MANA >= 10 )
+  {
+    gosub TM_SetHealingBusy
+    gosub TM_NewCastSpell 201 SELF 1 10 10 ;  cleanse by fire
+    wait 5
+  }
+
+  if ( ( #HITS < ( #MAXHITS - !large_heal_threshold ) ) ) && ( C notin #CHARSTATUS && !mortally_wounded = #FALSE ) && ( #MANA >= 9 )   ; use close wounds
+  {
+    gosub TM_SetHealingBusy
+    gosub TM_NewCastSpell 202 SELF 1 10 10 ;  close wounds
+    wait 5
+  }
+  if !bandaging = #FALSE
+    gosub TM_SetHealingIdle
+  set *TM_HEAL #FALSE
+  set !TM_HEAL #FALSE
+  set #LTARGETID !temp_ltargetid
+  set #LOBJECTID !temp_lobjectid
+  set #LTARGETKIND !temp_ltargetkind
+  gosub TM_AdvJournalSync chivalry
+  namespace pop
+return
+;------------------------------------------------------------
+sub TM_HealMortalStrikeCheck
+  namespace push
+  namespace global TM_healer
+  gosub TM_AdvJournalScan %1 VALID you_cannot_heal you_have_been_mortally ; mortally wounded, can't heal
+  if #RESULT = #TRUE
+  {
+    set !mortally_wounded #TRUE
+    gosub TM_AdvJournalSync %1
+    goto HealMortalStrikeCheck_skip
+  }
+  gosub TM_AdvJournalScan %1 VALID no_longer_mortally_wounded ; healing can now function
+  if #RESULT = #TRUE
+  {
+    set !mortally_wounded #FALSE
+    gosub TM_AdvJournalSync %1
+    goto HealMortalStrikeCheck_skip
+  }
+  
+HealMortalStrikeCheck_skip:
+  namespace pop
+return
+;------------------------------------------------------------
+sub TM_HealCheckNecromancy
+  namespace push
+  namespace global TM_healer
+  if ( #HITS < ( #MAXHITS - 12 ) ) && ( #MANA >= 10 )
+  {
+    gosub TM_SetHealingBusy
+    event macro 13 32 ; spirit speak
+    wait 20
+  }
+  if !bandaging = #FALSE
+    gosub TM_SetHealingIdle
+  namespace pop
+return
+;-------------------------------------------------------------------------------
+;---------------------------- External Interface Routine -----------------------
+;-------------------------------------------------------------------------------
+sub TM_GetHealStatus
+  namespace push
+  namespace global TM_healer
+  set #RESULT !TM_HEAL
+  namespace pop
+return #RESULT
+;-------------------------------------------------------------------------------
+;-------------------------------------------------------------------------------
+;-------------------------------------------------------------------------------
+;------------------------------------------------------------
+; sub TM_EnableAutoloot
+; return:
+;   #TRUE if Looting is in progress, wait until #FALSE
+;   #FALSE looting is idle.
+sub TM_EnableAutoloot
+  namespace push
+  namespace global TM_loot
+  set !TM_loot_enable #TRUE
+  namespace pop
+  set !TM_FunctionCalled #TRUE
+return
+;------------------------------------------------------------
+; sub TM_DisableAutoloot
+; return:
+;   #TRUE if Looting is in progress, wait until #FALSE
+;   #FALSE looting is idle.
+sub TM_DisableAutoloot
+  namespace push
+  namespace global TM_loot
+  set !TM_loot_enable #FALSE
+  namespace pop
+  set !TM_FunctionCalled #TRUE
+return
+;-------------------------------------------------------------------------------
+; %1 - Journal Name
+; %2 - #LPC setting
+; Brings !_jindex up to the most recent #journal entry
+sub TM_AdvJournalSync
+  namespace push
+  namespace local TM_AdvJS_ , %1
+  set !_jindex #jindex + 1
+  if %0 > 1
+    set !lpc_set %2
+  namespace pop
+return
+;-------------------------------------------------------------------------------
+; %1 - Journal Name
+; %2 - ADVANCE , ( _VALID ) - advances jindex pointer, anything else
+; %3, %4, %5, etc strings to match
+; returns #TRUE for match, #FALSE for no match
+;  Will not advance !_jindex pointer to allow for scanning journal history for more than one search.
+;  Also searches for : , #SPC in journal entry to be sure someone isn't spamming the text
+sub TM_AdvJournalScan
+  namespace push
+  namespace local TM_AdvJS_ , %1
+  set !args %2
+  set !temp_lpc #LPC
+  if !lpc_set = N/A
+    set #LPC 1000
+  else
+    set #LPC !lpc_set
+  set !num_args %0
+  set !first_arg 3
+  if !_jindex = N/A
+    set !_jindex #jindex
+  if !charname = N/A
+  {
+    set !charname #CHARNAME
+    AdvJournalScan_loop1:
+      str pos !charname #SPC
+      if #STRRES <> 0
+      {
+        set !val #STRRES - 1
+        str left !charname !val
+        set !left #STRRES
+        set !val !val + 1
+        str del !charname 1 !val
+        set !charname !left , _ , #STRRES
+        goto AdvJournalScan_loop1
+      }
+  }
+  set !index !first_arg
+  repeat
+    set !temp_jindex !_jindex
+    set !text % . !index
+    while !temp_jindex <= #jindex
+    {
+      scanjournal !temp_jindex
+      str pos #JOURNAL !charname 1
+      set !namepos #STRRES
+      str count #JOURNAL !charname
+      set !namecnt #STRRES
+      str pos #JOURNAL :_ 1
+      set !smcpos #STRRES
+      str pos #JOURNAL !text 1
+      set !textpos #STRRES
+      if !textpos < !smcpos && !smcpos <> 0 || !smcpos = 1 || :_ notin #JOURNAL || VALID notin !args
+        set !pass #TRUE
+      else
+        set !pass #FALSE
+      if ( !text in #journal && ( ( !namepos = 1 && !namecnt <= 1 ) || !pass ) )
+      {
+        set !temp_jindex !temp_jindex + 1
+        if ADVANCE in !args
+          set !_jindex !temp_jindex
+        set #LPC !temp_lpc
+        namespace pop
+        return #TRUE
+      }
+      set !temp_jindex !temp_jindex + 1
+    }
+    set !index !index + 1
+  until !index - !first_arg > !num_args - !first_arg
+  if ADVANCE in !args
+    set !_jindex !temp_jindex
+  set #LPC !temp_lpc
+  set %10 #JINDEX - !_jindex
+  set %10 %1 , _ , %10
+  namespace pop
+return #FALSE
+;-------------------------------------------------------------------------------
+; %1 = spell number
+; %2 = #TARGETID or SELF or NONE
+; %3 = retry count (-1 = cast until successful)
+; %4 = cast delay
+; %5 = recovery delay
+
+sub TM_NewCastSpell
+  namespace push
+  namespace local NCS
+  set !lpc #LPC
+  set #LPC 100
+  set !whichspell %1
+  set !whichtarget %2
+  set !castretrymax %3
+  set !waitdelay %4
+  set !recovery_delay %5
+
+  set !castretry 0
+  set !temp_ltargetid #LTARGETID
+  set !temp_ltargetkind #LTARGETKIND
+
+  NewCastSpell_loop1:
+    if !castretrymax < 0
+      goto NewCastSpell_cont1
+    if !castretry > !castretrymax
+      goto NewCastSpell_end1
+    NewCastSpell_cont1:
+      gosub TM_AdvJournalSync spellcast
+      set #LTARGETKIND 1
+      set #LTARGETID !whichtarget
+      set !tempmana #MANA
+      event macro 15 !whichspell ; cast the spell
+      wait !waitdelay
+      set !targettimeout #SCNT + 5
+      NewCastSpell_wait1:
+        gosub TM_AdvJournalScan spellcast VALID spell_fizzles you_have_not_yet mana your_spirit more_reagents is_disturbed
+        if #RESULT = #TRUE || #SCNT > !targettimeout
+        {
+          set !casttimeout #SCNT2 + !recovery_delay
+          repeat
+          until #SCNT2 > !casttimeout     ; finish up cast delay
+          set !castretry !castretry + 1
+          goto NewCastSpell_loop1
+        }
+        if !whichtarget = NONE
+          goto NewCastSpell_skip1
+        if #TARGCURS = 1
+          goto NewCastSpell_targ1
+        goto NewCastSpell_wait1 ; wait for target cursor
+
+  NewCastSpell_targ1:
+    if !whichtarget = SELF
+      event macro 23
+    else
+      event macro 22
+
+  NewCastSpell_skip1:
+    wait 5
+    set !casttimeout #SCNT2 + !recovery_delay
+    NewCastSpell_skip2:
+      if !whichspell >= 0 && !whichspell <= 63 ; Magery
+      {
+        gosub TM_AdvJournalScan spellcast VALID spell_fizzles there_is_already mana your_spirit more_reagents is_disturbed
+      }
+      else
+      {
+        set !cont #FALSE  ; Chivalry, Necromancy, etc
+        finditem !whichtarget *
+        if !whichtarget in SELF_NONE || #FINDKIND <> -1
+          set !cont #TRUE
+
+        if #MANA >= !tempmana && !cont = #TRUE ; check if target is still there
+          set #RESULT #TRUE
+        else
+          set #RESULT #FALSE
+      }
+
+      set !temp #RESULT
+      repeat
+      until #SCNT2 > !casttimeout     ; finish up cast delay
+      if !temp = #TRUE
+      {
+        if !castretrymax > -1
+        {
+          set !castretry !castretry + 1 ; %castretrymax of -1 will cast until successful
+          if !castretry > !castretrymax
+            goto NewCastSpell_end1
+        }
+        goto NewCastSpell_loop1
+      }
+      if #SCNT2 <= !casttimeout     ; finish up cast delay
+        goto NewCastSpell_skip2
+  NewCastSpell_end1:
+    set #LTARGETID !temp_ltargetid
+    set #LTARGETKIND !temp_ltargetkind
+    set #LPC !lpc
+    namespace pop
+return
+;-------------------------------------------------------------------------------
+; %1 = OpenStatusBar
+sub OpenStatusBar
+  event macro 8 2 ; open status
+  gosub TM_GumpWait status_gump NULL
+  contpos 0 600
+return
+;-------------------------------------------------------------------------------
+; %1 = Gumpname 1
+; %2 = Gumpname 2
+; #TRUE gump occured before timeout
+sub TM_GumpWait
+  namespace push
+  namespace local GW
+  wait 10
+  set !timedelay #SCNT
+  while #SCNT <= !timedelay + 7
+  {
+    if #CONTNAME = %1 || #CONTNAME = %2
+    {
+      namespace pop
+      return #TRUE
+    }
+  }
+  namespace pop
+return #FALSE
+;--------- EasyUO Menu Designer Code Begin ---------
+sub showEUOMenu1
+	menu Clear
+	menu Window Title ScriptUO Healing Commander , #SPC , %version
+	menu Window Color BtnFace
+	menu Window Size 389 125
+	menu Font Transparent #true
+	menu Font Align Right
+	menu Shape EUOShape1 4 8 109 113 3 7 1 Black 7 White
+	menu Font Name MS Sans Serif
+	menu Font Size 10
+	menu Font Style b
+	menu Font Color WindowText
+	menu Font Transparent #false
+	menu Font Align Left
+	menu Font BGColor White
+	menu Text EUOLabel1 8 12 Healing:
+	menu Shape EUOShape2 116 8 109 113 3 7 1 Black 7 White
+	menu Text EUOLabel2 120 12 Curing:
+	menu Font Size 8
+	menu Font Style
+	menu Font BGColor BtnFace
+	menu Text EUOLabel3 272 12 Bandage Threshold
+	menu Text EUOLabel4 272 36 Large Heal Threshold
+	menu Text EUOLabel5 272 60 Small Heal Threshold
+	menu Shape EUOShape3 240 100 73 21 3 7 1 Black 7 Lime
+	menu Font BGColor Lime
+	menu Text EUOLabel6 268 103 Idle
+	menu Font BGColor White
+	menu Check EUOCheckBox1 12 32 97 17 #false Bandages
+	menu Check EUOCheckBox2 12 48 97 17 #false Magery
+	menu Check EUOCheckBox3 12 64 97 17 #false Chivalry
+	menu Check EUOCheckBox4 12 80 97 17 #false Necromancy
+	menu Font BGColor BtnFace
+	menu Button EUOButton1 332 100 51 21 Save
+	menu Font BGColor White
+	menu Check EUOCheckBox5 124 32 97 17 #false Bandages
+	menu Check EUOCheckBox6 124 48 97 17 #false Magery
+	menu Check EUOCheckBox7 124 64 97 17 #false Chivalry
+	menu Font BGColor Window
+	menu Edit EUOEdit1 228 8 41 10
+	menu Edit EUOEdit2 228 32 41 30
+	menu Edit EUOEdit3 228 56 41 15
+	menu Font BGColor BtnFace
+	menu Check EUOCheckOSIBandaging 228 80 97 17 #false OSI Bandaging
+	menu Show 421 270
+return
+;--------- EasyUO Menu Designer Code End ---------
+

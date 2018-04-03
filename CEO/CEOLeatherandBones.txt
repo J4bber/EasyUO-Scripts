@@ -1,0 +1,473 @@
+    ;==================================
+    ; Script Name: CEOLeatherandBones
+    ; Author: CEO
+    ; Version: 1.3a
+    ; Client Tested with: 4.0.1b
+    ; EUO version tested with: 1.4 (0067)
+    ; Shard OSI / FS:
+    ; Revision Date: 01-24-04
+    ; Public Release: 01-24-04
+    ; Purpose:  Leather and Bones, Leather and Bones, this script loots Leather and Bones (sung to the tune of Silver and Gold).
+    ;=================================
+    initevents
+    set %version 1.3a
+    ;=================================
+    ; Not much to change
+    ;
+    ; For debuging
+    set %debug #false
+    ; Add more types for your stuff if you want...
+    set %knifetypes CNF_BNF_TSF_WSF_GMH
+    ; set #true for a slow connection
+    set %slowconnection #false
+    ; set to #true if you want to hide corpses
+    set %hidecorpses #false
+    ; Corpse Container Postion - set the x/y to where you want to open the corpse
+    set %corpseContainerX 0
+    set %corpseContainerY 0
+    ;=================================
+    gosub CheckEUOVersion 1 41 102 euomajor euominor euobuild
+    if ! #result
+    {
+            menu hideeuo
+            str del %euobuild 1 1
+            display ok Your Environment:$$EasyUO Version: %euomajor , #dot , %euominor , #spc , ( , build , #spc , #strres , )$
+    +Client: #CLIVER $$
+    +This script requires EasyUO version 1.41 (build 0066) or higher.$$
+    +Sorry you can not use it with this version. Halting.
+            menu hide
+            halt
+    }
+    set %scissortypes KAG_JAG
+    set %corspetype YFM
+    set %leathertypes EEG_GED_DEG
+    set %miscbonetypes OJK_XIK_SJK_IJK_TJK_BJK_UJK_DJK_MJK_
+    +AJK_LJK_FJK_RJK_EJK_ZIK_YIK_JJK_GJK_KJK_HJK
+    set %resourcetype EEG_GED_OJK_XIK_SJK_IJK_TJK_BJK_UJK_DJK_MJK_
+    +AJK_LJK_FJK_RJK_EJK_ZIK_YIK_JJK_GJK_KJK_HJK_DEG
+    set %cuttypes EEG_GED_OJK_XIK_SJK_IJK_TJK_BJK_UJK_DJK_MJK_
+    +AJK_LJK_FJK_RJK_EJK_ZIK_YIK_JJK_GJK_KJK_HJK_DEG
+    set %bonetype GUF
+    set %tcorpses 0
+    set %tleather 0
+    set %tbones 0
+    if %slowconnection
+    {
+            set %wait1 20
+    }
+    else
+    {
+            set %wait1 10
+    }
+    gosub GetKnife
+    if ! #result
+    {
+            display ok You need a knife in your backpack for cutting$up corpses. Script Halted.
+            halt
+    }
+    gosub GetScissors
+    if ! #result
+    {
+            display ok You need scissors in your backpack for cutting$up hides and bones. Script Halted.
+            halt
+    }
+    gosub GetPaperdollxy
+    gosub StatusBarUp
+    linespercycle 40
+    gosub initmenu
+    set #menubutton N/A
+    MainLoop:
+    wait %wait1 %wait1
+    if #menubutton = closed
+            gosub closed
+    menu delete status
+    menu text status 50 10 Waiting.
+    wait 5
+    if #weight >= #maxweight - 20
+    {
+            display ok You are now overweight, the script will$not pick up anymore resources until you$empty your pack.
+            set %waitcount 0
+            menu delete status
+            menu text status 50 10 Paused, overweight.
+    waitforweight:
+            wait 20
+            if #weight >= #maxweight - 5
+            {
+                    set %waitcount 0
+                    goto waitforweight
+            }
+            set %waitcount %waitcount + 1
+            if %waitcount < 3
+                    goto waitforweight
+    }
+    set %temp1 ( %maxloaded - #weight ) / 5
+    finditem %corspetype G_1
+    if #findkind = 1
+    {
+            menu delete status
+            menu text status 50 10 Corpse found , #dot
+            set %tcorpses %tcorpses + 1
+            set %findid #findid
+            wait %wait1 %wait1
+            event property %findid
+            wait %wait1
+            if wisp in #property
+            {
+                            set %collecttype 2
+                            goto skip1
+            }
+            set %corpse_property #property
+            gosub Corspecutter %findid %knifeid
+            if ! #result
+                    goto skip2
+    skip1:
+            gosub OpenCorpse %findid
+            if ! #result
+                    goto Skip2
+    lootagain:
+    
+            finditem %resourcetype C_ , %instance_id
+            if #findkind <> -1
+            {
+                    set %resourceid #findid
+                    gosub DropOnBackpack %resourceid
+                    if %resourcetype in %cuttypes
+                            gosub CutResource %resourceid
+                    goto lootagain
+            }
+    skip2:
+            ignoreitem %findid
+            if %hidecorpses
+                    hideitem %findid
+            click %corpseCloseX %corpseCloseY r
+            gosub UpdateStats
+    }
+    goto MainLoop
+    halt
+     
+    sub OpenCorpse
+    menu delete status
+    menu text status 50 10 Opening corpse.
+    set %retry 0
+    set %_corpse %1
+    OC1:
+    finditem %_corpse
+    if #findkind = -1
+            return #false
+    set #lobjectid #findid
+    set #nextcposx %corpseContainerX
+    set #nextcposy %corpseContainerY
+    gosub resetjournal
+    event macro 17
+    wait %wait1
+    gosub FindJournalMessage DID_NOT_EARN A_CRIMINAL YOU_CAN_NOT_LOOT
+    if #result
+            return #false
+    gosub GetInstanceID
+    if ! #result
+    {
+            set %retry %retry + 1
+            if %retry < 4
+                    goto OC1
+            return #false
+    }
+    set %corpseCloseX #contposx + 75
+    set %corpseCloseY #contposy + 125
+    return #true
+     
+    sub GetInstanceID
+    ;pub 28 fix for instance corpses
+    set %ttw #scnt2 + 25
+    GIID1:
+    if #contname = container_gump && #contsize = 144_212
+    {
+            set %instance_id #contid
+            return #true
+    }
+    if #scnt2 < %ttw
+            goto GIID1
+    return #false
+     
+    sub CorspeCutter
+    menu delete status
+    menu text status 50 10 Cutting corpse.
+    ; %1 = corspeid , %2 = knife
+    set #lobjectid %2
+    set #ltargetid %1
+    set #lTargetKind 1
+    gosub resetjournal
+    event macro 17 0
+    target 4s
+    event macro 22 0
+    wait %wait1 %wait1
+    gosub FindJournalMessage HIDES_ARE_NOW
+    if #result
+            set %collecttype 1
+    return #result
+     
+    sub CutResource
+    menu delete status
+    menu text status 50 10 Cutting resource.
+    CR1:
+    finditem %cuttypes C_ , %backpackid
+    if #findkind <> -1
+    {
+            set %_findid #findid
+            if %collecttype = 2
+            {
+                    gosub CountBones
+                    set %bonecount #result
+            }
+            set #ltargetid %_findid
+            set #lTargetKind 1
+            set #lobjectid %scissorid
+            wait 5
+            event macro 17 0
+            target 5s
+            event macro 22 0
+            wait %wait1
+            if %collecttype = 2
+            {
+                    gosub CountBones
+                    set %tbones %tbones + ( #result - %bonecount )
+            }
+            goto CR1
+    }
+    return
+     
+    sub CountBones
+    finditem %bonetype C_ , %backpackid
+    if #findkind <> -1
+            return #findstack
+    return 0
+     
+    sub GetKnife
+    finditem %knifetypes C
+    if #findkind <> -1
+    {
+            set %knifeid #findid
+            return #true
+    }
+    return #false
+     
+    sub GetScissors
+    finditem %scissortypes C
+    if #findkind <> -1
+    {
+            set %scissorid #findid
+            set %backpackid #findbagid
+            return #true
+    }
+    return #false
+     
+    sub DropOnBackpack
+    menu delete status
+    menu text status 50 10 Getting resource.
+    %1 = id of item to get
+    set %_dropid %1
+    finditem %_dropid
+    if #findtype in %miscbonetypes
+            set %collecttype 2
+    if #findtype in %leathertypes
+            set %collecttype 1
+    set %findstack #findstack
+    set %max2get %findstack
+    set %maxhold ( #maxweight + 65  - #weight - 5 ) / 5
+    set %maxhold2 #maxweight - #weight
+    if %max2get > %maxhold
+            set %max2get %maxhold
+    if %max2get > %maxhold2
+            set %max2get %maxhold2
+    event drag %_dropid
+    wait %wait1
+    if %max2get = %findstack
+            msg $
+    else
+            msg %max2get $
+    wait %wait1
+    set %retry 0
+    DOB1:
+    click %backpackx %backpacky p
+    wait %wait1
+    if #lliftedkind = 1
+    {
+            set %retry %retry + 1
+            if %retry > 6
+            {
+                    display ok Can't drop on backpack.$Giving up. Script HALTED.
+                    halt
+            }
+            if %retry > 4
+            {
+                    display ok Problem dropping item on backpack.$Make sure the backpack on the Paperdoll$
+    +is not covered! You have seconds after hitting ok 2 fix.
+                    wait 2s
+            }
+            gosub GetPaperDollXY
+            goto DOB1
+    }
+    if %collecttype = 1
+            set %tleather %tleather  + %findstack
+    return
+     
+    sub GetPaperDollXY
+    menu delete status
+    menu text status 50 10 Get Paperdoll Info
+    GPDXY1:
+    event macro 8 1
+    wait %wait1 %wait1
+    if #contname <> paperdoll_gump
+            goto GPDXY1
+    set %paperdollx #contposx
+    set %paperdolly #contposy
+    set %backpackx #contposx + 140
+    set %backpacky #contposy + 220
+    wait 5
+    wait %wait1 %wait1
+    return
+     
+    sub resetjournal
+    scanjournal 1
+    deletejournal
+    return
+     
+    sub FindJournalMessage
+    set %jc 1
+    FJM1:
+    scanjournal %jc
+    if #journal = N/A
+            return #false
+    for %_i 1 %0
+    {
+    if % . %_i in #journal
+            return #true
+    }
+    set %jc %jc + 1
+    goto FJM1
+     
+     
+    sub InitMenu
+    menu clear
+    menu window size 220 80
+    menu window title CEOLeatherAndBones %version
+    menu window color black
+    menu font bgcolor BLACK
+    menu font color red
+    menu show %menux %menuy
+    menu font size 9
+    menu text h1 5 10 Status:
+    menu text h1 5 25 Total Corpses
+    menu text h1 110 25 :
+    menu text h1 5 40 Leather Collected
+    menu text h1 110 40 :
+    menu text h1 5 55 Bones Collected
+    menu text h1 110 55 :
+    gosub UpdateStats
+    if ! %debug
+            menu hideeuo
+    return
+     
+    sub UpdateStats
+    menu font color lime
+    menu font align right
+    menu delete d1
+    menu text d1 150 25 %tcorpses
+    menu delete d2
+    menu text d2 150 40 %tleather
+    menu delete d3
+    menu text d3 150 55 %tbones
+    menu font align left
+    return
+     
+    sub StatusBarUp
+    ;purpose - make sure the status bar is up on the char
+    IF #charname = N/A
+    {
+            Event Macro 8 2
+            wait %wait1
+    }
+    if #charname = N/A
+    {
+            display ok Status bar must be opened.
+            halt
+    }
+    return
+     
+    sub closed
+    if ! %debug
+            terminate euo
+    return
+     
+    sub CheckEUOVersion
+    ; the.wza's version check from the boards. Modified a little....
+       nameSpace push
+       nameSpace Local CheckEUOVersion
+       set !VerMajor %1
+       set !VerMinor %2
+       set !VerBuild %3
+            set !params %0
+       gosub _getStringBeforeUnderscore #euoVer
+       set !euoMajor #result
+       gosub _getStringBeforeUnderscore #strRes
+       set !euoMinor #result
+       set !euoBuild #strRes
+            if !params = 6
+            {
+                    set % . %4 !euoMajor
+                    set % . %5 !euoMinor
+                    gosub converthex !euobuild
+                    set % . %6 #result
+            }
+       set %0 !euoMajor > !VerMajor ||
+          + ( !euoMajor = !VerMajor && !euoMinor > !VerMinor ) ||
+          + ( !euoMajor = !VerMajor && !euoMinor = !VerMinor && !euoBuild >= !VerBuild )
+       nameSpace clear
+       nameSpace pop
+    return %0
+     
+    ; in : xxx_yyy
+    ; out : #result = xxx
+    ;       #strRes = yyy
+    sub _getStringBeforeUnderscore
+       str Pos %1 _
+       set !len #strRes - 1
+       str Left %1 !len
+       set %0 #strRes
+       set !len !len + 1
+       str Del %1 1 !len
+    return %0
+     
+    sub converthex
+    ; assumes the normal max of 4 hex digits in build format.
+    set %decimal %1
+    set %_h0 0
+    set %_h1 1
+    set %_h2 2
+    set %_h3 3
+    set %_h4 4
+    set %_h5 5
+    set %_h6 6
+    set %_h7 7
+    set %_h8 8
+    set %_h9 9
+    set %_h10 a
+    set %_h11 b
+    set %_h12 c
+    set %_h13 d
+    set %_h14 e
+    set %_h15 f
+    set %h1 %decimal / 4096
+    if %h1 <> 0
+            set %decimal %decimal - ( %h1 * 4096 )
+    set %h2 %decimal / 256
+    if %h2 <> 0
+            set %decimal %decimal - ( %h2 * 256 )
+    set %h3 %decimal / 16
+    if %h3 <> 0
+            set %decimal %decimal - ( %h3 * 16 )
+    set %h4 %decimal % 16
+    set %hex x , %_h . %h1 , %_h . %h2 , %_h . %h3 , %_h . %h4
+    return %hex
+
+
+_________________

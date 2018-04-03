@@ -1,0 +1,440 @@
+;============================================
+; Script Name: TrailMyx's Runebook Organizer
+; Author: TrailMyx
+; Version: 0.4
+; Client Tested with: 5.0.1h 60
+; EUO version tested with: 1.5 105
+; Shard OSI / FS:  FS (Alexandria) / OSI OK
+; Revision Date:  15-Feb-07
+; Public Release: 15-Feb-07
+; Global variables:  none
+; Purpose:
+;  Organize a runebooks contents.  Lets you experiment with rune placement
+;  before you commit to the layout.
+;
+;
+; Menu designed with Menu Designer.
+;  v1.00 - release version
+;
+;============================================
+set %version v0.4
+gosub showEUOMenu1
+
+set #MENUBUTTON N/A
+
+repeat
+  finditem QWL C_ , #BACKPACKID
+  if #FINDCNT > 0
+    ignoreitem #FINDID
+until #FINDCNT = 0
+
+set %runebook_read #FALSE
+set %rune_count 0
+set %moved_runes 0
+
+repeat
+  if #MENUBUTTON = EUOButtonReadRunebook
+  {
+    set #MENUBUTTON N/A
+    display okcancel Please select the runebook you would like to organize
+    if #DISPRES <> cancel
+    {
+      set #TARGCURS 1
+      repeat
+      until #TARGCURS = 0
+          
+      finditem #LTARGETID C_ , #BACKPACKID    
+      if #FINDTYPE = ZBN
+      {
+        set %runebook #FINDID
+        gosub GetNameDropRunes #FINDID
+      }
+    }
+  }
+  if #MENUBUTTON = EUOButtonRestoreRunebook
+  {
+    set #MENUBUTTON N/A
+    gosub RestoreRunebook %runebook
+  }
+  
+  if #MENUBUTTON = EUOButton3
+  {
+    set #MENUBUTTON N/A
+    gosub WriteNewOrganization %runebook
+  }
+  
+  if #MENUBUTTON = EUOButton4
+  {
+    set #LPC 10000
+    set #MENUBUTTON N/A
+    for %ii 1 16
+    {
+      set %index %ii + 16
+      set %label EUOLabel , %index
+      menu set %label .....
+      set %value %rune_name . %ii
+      set %label EUOLabel , %ii
+      menu set %label %value
+      set %move_dest . %ii N/A
+      set %move_origin . %index N/A
+      set %moved_runes 0
+    }
+    set #LPC 10
+  }
+
+  if %runebook_read = #TRUE
+  {
+    set #LPC 10000
+    for %ii 1 16
+    {
+      set %checkbox EUOCheckBox , %ii
+      menu get %checkbox
+      if #MENURES = #TRUE
+      {
+        if %move_dest . %ii = N/A
+        {
+          set %ptr 17   ; find an open rune position.
+          while %move_origin . %ptr <> N/A
+          {
+            set %ptr %ptr + 1
+          }
+          set %destination_ptr %ptr - 16
+          menu set %checkbox #FALSE
+          set %destindex %destination_ptr + 16
+          set %destlabel EUOLabel , %destindex
+          set %label EUOLabel , %ii
+          menu set %destlabel %rune_name . %ii
+          menu set %label .....
+          set %move_dest . %ii %destination_ptr ; 1-16 rune index of dest
+          set %move_origin . %destindex %ii     ; 17-32 index back to origin
+          set %moved_runes %moved_runes + 1
+        }
+      }
+    }
+    
+    for %ii 17 32
+    {
+      set %checkbox EUOCheckBox , %ii
+      menu get %checkbox
+      if #MENURES = #TRUE
+      {
+        if %move_origin . %ii <> N/A
+        {
+          menu set %checkbox #FALSE
+          set %restore_index %move_origin . %ii
+          set %source_label EUOLabel , %restore_index
+          set %source_info %rune_name . %restore_index
+          menu set %source_label %source_info
+          set %label EUOLabel , %ii
+          menu set %label .....
+          set %move_dest . %restore_index N/A
+          set  %move_origin . %ii N/A
+          set %index %ii + 1
+          set %moved_runes %moved_runes - 1
+          while %move_origin . %index <> N/A
+          {
+            set %prev %index - 1 ; this was just deleted/overwritten
+            set %origin %move_origin . %index ; index back into
+            set %move_origin . %prev %move_origin . %index
+            set %dest_index %prev - 16
+            set %move_dest . %origin %dest_index ; set to previous index
+            set %label EUOLabel , %prev
+            set %value %rune_name . %origin
+            menu set %label %value
+            set %label EUOLabel , %index
+            menu set %label .....
+            set %move_origin . %index N/A
+            set %index %index + 1
+            if %index > 32
+              break
+          }
+        }
+      }
+    }
+    set #LPC 10
+  }
+until #FALSE
+;---------------------------------------------------
+; %1 - Runebookid
+sub GetNameDropRunes
+  set %rb %1
+
+  set #LOBJECTID %rb
+  set #LTARGETKIND 1
+
+  event macro 17 0
+  gosub GumpWait generic_gump generic_gump
+  wait 10
+  
+  for %ii 16 1
+  {
+    gosub SelectPageDropRune %rb %ii
+    finditem QWL C_ , #BACKPACKID
+    if #FINDKIND <> -1
+    {
+      event property #FINDID
+      set %label EUOLabel , %ii
+      set %str Recall , #SPC , Rune , #SPC , For
+      str pos #PROPERTY %str 1
+      set %len #STRRES + 15
+      str del #PROPERTY 1 %len
+      set %str #STRRES
+      str pos %str ( 1
+      set %len #STRRES - 2
+      str left %str %len
+;      menu Font BGColor red
+      menu set %label #STRRES
+      set %rune_name . %ii #STRRES
+      set %rune_id . %ii #FINDID
+      set %move_dest . %ii N/A
+      set %rune_count %rune_count + 1
+      ignoreitem #FINDID 2
+;      menu Font Color WindowText
+    }
+    else
+    {
+      set %label EUOLabel , %ii
+      menu set %label Empty
+      set %rune_name . %ii N/A
+      set %rune_id . %ii N/A
+      set %move_dest . %ii N/A
+    }
+  }
+  set %moved_runes 0
+  set %runebook_read #TRUE
+  ignoreitem reset 2
+return
+;---------------------------------------------------
+; %1 - runebook
+sub RestoreRunebook
+  set %rb %1
+  set #LOBJECTID %rb
+  if %runebook_read = #TRUE
+  {
+    event macro 17 0
+    gosub GumpWait generic_gump generic_gump
+    set %clickx #CONTPOSX + 110
+    set %clicky #CONTPOSY + 50
+    click %clickx %clicky mc r ; make sure runebook is closed
+    wait 20
+    for %ii 1 16
+    {
+      set %rune_id %rune_id . %ii
+      if %rune_id <> N/A
+      {
+        finditem %rune_id C_ , #BACKPACKID
+        if #FINDKIND <> -1
+        {
+          exevent drag #FINDID #FINDSTACK
+          wait 10
+          exevent dropc %rb
+          wait 10
+        }
+      }
+      set %rune_id . %ii N/A
+      set %rune_name . %ii N/A
+      set %move_dest . %ii N/A
+      set %index %ii + 16
+      set %move_origin . %index N/A
+      set %label EUOLabel , %ii
+      menu set %label .....
+    }
+  }
+  set %runebook_read #FALSE
+  set %moved_runes 0
+  set %rune_count 0
+return
+;---------------------------------------------------
+; %1 - runebook
+sub WriteNewOrganization
+  set %rb %1
+  set #LOBJECTID %rb
+  
+  if %moved_runes <> %rune_count
+  {
+    display yesno You have not assigned all dropped runes, do you want to continue?
+    if #DISPRES = no
+      return
+  }
+  if %runebook_read = #TRUE
+  {
+    event macro 17 0
+    gosub GumpWait generic_gump generic_gump
+    set %clickx #CONTPOSX + 110
+    set %clicky #CONTPOSY + 50
+    click %clickx %clicky mc r ; make sure runebook is closed
+    wait 20
+    for %ii 17 32
+    {
+      set %rune_index %move_origin . %ii
+      set %rune_id %rune_id . %rune_index
+      if %rune_id <> N/A
+      {
+        finditem %rune_id C_ , #BACKPACKID
+        if #FINDKIND <> -1
+        {
+          exevent drag #FINDID #FINDSTACK
+          wait 10
+          exevent dropc %rb
+          wait 10
+        }
+      }
+      set %rune_id . %rune_index N/A
+      set %rune_name . %rune_index N/A
+      set %move_dest . %rune_index N/A
+      set %move_origin . %ii N/A
+      set %label EUOLabel , %ii
+      menu set %label .....
+      set %label %ii - 16
+      set %label EUOLabel , %label
+      menu set %label .....
+    }
+  }
+  set %runebook_read #FALSE
+  set %moved_runes 0
+  set %rune_count 0
+return
+;---------------------------------------------------
+sub SelectPageDropRune
+  set %rbook %1
+  set %locindex %2
+
+  set %runeclickx 140 ; page 1, rune 1
+  set %runeclickx ( #CONTPOSX + %runeclickx + ( 35 * ( ( %locindex - 1 ) / 2 ) ) )
+  if %locindex > 8
+  {
+    set %runeclickx 310 ; page 2, rune 1
+    set %runeclickx ( #CONTPOSX + %runeclickx + ( 35 * ( ( %locindex - 9 ) / 2 ) ) )
+  }
+  set %runeclicky #CONTPOSY + 196
+  click %runeclickx %runeclicky
+  wait 20
+  
+  if %locindex % 2 = 0
+  {
+    set %runeclickx #CONTPOSX + 299
+  }
+  else
+  {
+    set %runeclickx #CONTPOSX + 139
+  }
+  set %runeclicky #CONTPOSY + 118
+  click %runeclickx %runeclicky mc
+  wait 20
+  set #LOBJECTID %rbook
+  event macro 17 0
+  gosub GumpWait generic_gump generic_gump
+  wait 15
+return
+;-------------------------------------------------------------------------------
+; %1 = Gumpname 1
+; %2 = Gumpname 2
+sub GumpWait
+  wait 10
+  set %timedelay #SCNT
+  loopwait1:
+    if #CONTNAME = %1 || #CONTNAME = %2
+      return
+    if #SCNT > %timedelay + 7
+      return
+    goto loopwait1
+return
+;--------- EasyUO Menu Designer Code Begin ---------
+sub showEUOMenu1
+	menu Clear
+	menu Window Title TrailMyx's Runebook Organizer , #SPC , %version
+	menu Window Color BtnFace
+	menu Window Size 703 194
+	menu Font Transparent #true
+	menu Font Align Right
+	menu Shape EUOShape1 4 44 329 145 3 7 1 Black 7 White
+	menu Font Name Courier New
+	menu Font Size 8
+	menu Font Style
+	menu Font Color WindowText
+	menu Font Transparent #false
+	menu Font Align Left
+	menu Font BGColor White
+	menu Text EUOLabel1 32 52 .....
+	menu Text EUOLabel2 32 68 .....
+	menu Text EUOLabel3 32 84 .....
+	menu Text EUOLabel4 32 100 .....
+	menu Text EUOLabel5 32 116 .....
+	menu Text EUOLabel6 32 132 .....
+	menu Text EUOLabel7 32 148 .....
+	menu Text EUOLabel8 32 164 .....
+	menu Shape EUOShape2 168 44 5 145 3 7 1 Black 7 White
+	menu Text EUOLabel9 204 52 .....
+	menu Text EUOLabel10 204 68 .....
+	menu Text EUOLabel11 204 84 .....
+	menu Text EUOLabel12 204 100 .....
+	menu Text EUOLabel13 204 116 .....
+	menu Text EUOLabel14 204 132 .....
+	menu Text EUOLabel15 204 148 .....
+	menu Text EUOLabel16 204 164 .....
+	menu Shape EUOShape3 368 44 329 145 3 7 1 Black 7 White
+	menu Shape EUOShape4 532 44 5 145 3 7 1 Black 7 White
+	menu Text EUOLabel17 396 52 .....
+	menu Text EUOLabel18 396 68 .....
+	menu Text EUOLabel19 396 84 .....
+	menu Text EUOLabel20 396 100 .....
+	menu Text EUOLabel21 396 116 .....
+	menu Text EUOLabel22 396 132 .....
+	menu Text EUOLabel23 396 148 .....
+	menu Text EUOLabel24 396 164 .....
+	menu Text EUOLabel25 564 52 .....
+	menu Text EUOLabel26 564 68 .....
+	menu Text EUOLabel27 564 84 .....
+	menu Text EUOLabel28 564 100 .....
+	menu Text EUOLabel29 564 116 .....
+	menu Text EUOLabel30 564 132 .....
+	menu Text EUOLabel31 564 148 .....
+	menu Text EUOLabel32 564 164 .....
+	menu Font Name MS Sans Serif
+	menu Font BGColor BtnFace
+	menu Text EUOLabel33 344 64 >>
+	menu Text EUOLabel34 344 108 >>
+	menu Text EUOLabel35 344 152 >>
+	menu Button EUOButtonReadRunebook 16 12 135 25 Select Read Runebook
+	menu Button EUOButtonRestoreRunebook 184 12 135 25 Restore Runebook
+	menu Button EUOButton3 524 12 135 25 Commit Changes
+	menu Font BGColor White
+	menu Check EUOCheckBox1 12 52 21 17 #false
+	menu Check EUOCheckBox2 12 68 21 17 #false
+	menu Check EUOCheckBox3 12 84 21 17 #false
+	menu Check EUOCheckBox4 12 100 21 17 #false
+	menu Check EUOCheckBox5 12 116 21 17 #false
+	menu Check EUOCheckBox6 12 132 21 17 #false
+	menu Check EUOCheckBox7 12 148 21 17 #false
+	menu Check EUOCheckBox8 12 164 21 17 #false
+	menu Check EUOCheckBox9 184 52 21 17 #false
+	menu Check EUOCheckBox10 184 68 21 17 #false
+	menu Check EUOCheckBox11 184 84 21 17 #false
+	menu Check EUOCheckBox12 184 100 21 17 #false
+	menu Check EUOCheckBox13 184 116 21 17 #false
+	menu Check EUOCheckBox14 184 132 21 17 #false
+	menu Check EUOCheckBox15 184 148 21 17 #false
+	menu Check EUOCheckBox16 184 164 21 17 #false
+	menu Font BGColor BtnFace
+	menu Button EUOButton4 364 12 135 25 Restart Organization
+	menu Font BGColor White
+	menu Check EUOCheckBox17 372 52 21 17 #false
+	menu Check EUOCheckBox18 372 68 21 17 #false
+	menu Check EUOCheckBox19 372 84 21 17 #false
+	menu Check EUOCheckBox20 372 100 21 17 #false
+	menu Check EUOCheckBox21 372 116 21 17 #false
+	menu Check EUOCheckBox22 372 132 21 17 #false
+	menu Check EUOCheckBox23 372 148 21 17 #false
+	menu Check EUOCheckBox24 372 164 21 17 #false
+	menu Check EUOCheckBox25 544 52 21 17 #false
+	menu Check EUOCheckBox26 544 68 21 17 #false
+	menu Check EUOCheckBox27 544 84 21 17 #false
+	menu Check EUOCheckBox28 544 100 21 17 #false
+	menu Check EUOCheckBox29 544 116 21 17 #false
+	menu Check EUOCheckBox30 544 132 21 17 #false
+	menu Check EUOCheckBox31 544 148 21 17 #false
+	menu Check EUOCheckBox32 544 164 21 17 #false
+	menu Show 421 270
+return
+;--------- EasyUO Menu Designer Code End ---------
+

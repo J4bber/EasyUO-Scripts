@@ -1,0 +1,453 @@
+;=================================================================
+; Script Name: TrailMyx's Cross-healing Veterinary Trainer
+; Author: TrailMyx
+; Version: 3
+; Shard OSI / FS: OSI / FS OK
+; Revision Date: 9/29/2007
+; Purpose: Trains veterinary skill using 2 tamed critters.  See requirements below:
+; Requirements:
+;   0) Adjust %target_skill and %secure_container according to your needs.
+;   1) 2 equally weak critters.  I use cows
+;   2) Guilded in Tram
+;   3) Guard yourself with tames.  Name them both something unique and matching the names in UI
+;   4) Pull the pet gumps and place them in a spot where they won't be covered.  This script uses
+;      OCR to determine the pet health
+;   5) BUNCH of bandages
+;   6) Stand within 2 spaces of secure container
+;   7) Press "Start" button to setup gumps to match the names in UI
+;   8) "Start" button turns into "Ready" button.  Pressing that will begin the healing process
+;      script will automatically cause the critters to kill one another.  If you are attacked, the script
+;      will stop so you can start again.  
+;
+;=================================================================
+; Disclaimer:  By running this script, you are accepting the contents of this licence agreement.
+; This script is only authorized to be distributed on www.scriptuo.com.  If you purchase this script,
+; acquire it from another website, it is not considered an authorized copy and should be deleted
+; immediately.
+; You hold the author, TrailMyx, and the distribution site www.scriptuo.com not liable for any loss of
+; items, accounts, monitary or time losses associated with the use of this script.  Furthermore, you promise
+; not to distribute or sell this script to anyone without the express permission of the author, Trailmyx.
+; Violation of the contents of this agreement will result in one of the following: litigation, www.scriptuo.com
+; account termination, discimination of bad karma for your next life, and most definitely causing a black mark
+; placed on your soul.
+;
+; I worked very hard to bring this script to you, so please use it responisibily and
+; respectfully.  If you have any questions, please reach me at trailmyx2@scriptuo.com.
+; (c) 2007 TrailMyx, All rights reserved.
+;
+;===================================================================
+
+;----------- User configuration ------------------
+set %secure_container XXYYZ1   ; In case you want to pull bandages from a secure
+set %target_skill 1000
+;---------- End ser configuration ----------------
+
+if %secure_container = XXYYZ1
+{
+  display ok Please be sure to setup your skill target and secure container.
+}
+
+gosub showEUOMenu1
+gosub TM_AdvJournalSync HEALING 100
+set %mode SETUP_GUMPS
+menu Font BGColor BtnFace
+menu delete EUOButton1
+menu Button EUOButton1 12 88 75 25 Setup
+
+chooseskill vete
+gosub ConvertSkill #skill
+menu set EUOEdit2 %2
+
+set %start_skill #skill
+;set %current_skill #skill
+
+set %timer #SCNT
+set %start_time %timer
+set %gain_count 0
+
+finditem ZLF C_ , #BACKPACKID
+menu set EUOEditBandages #FINDSTACK
+
+set #MENUBUTTON N/A
+repeat
+  if #HITS <> #MAXHITS
+  {
+    msg all stop$
+    display ok You are being attacked, restart script.
+    stop
+  }
+  menu get EUOEditThreshold
+  set %heal_percentage #MENURES
+  if #MENUBUTTON = EUOButton1
+  {
+    set #MENUBUTTON N/A
+    if %mode = SETUP_GUMPS
+    {
+      set %mode READY
+      gosub SetupPetGumps
+      menu delete EUOButton1
+      menu Button EUOButton1 12 88 75 25 Ready
+      continue
+    }
+    
+    if %mode = READY
+    {
+      set %mode ACTIVE
+      msg all guard me$
+      menu get EUOEditPet2
+      gosub TargetCreature 1 #MENURES
+      menu get EUOEditPet1
+      gosub TargetCreature 2 #MENURES
+      menu delete EUOButton1
+      menu Button EUOButton1 12 88 75 25 Active
+      continue
+    }
+  }
+  if #MENUBUTTON = EUOButton2
+  {
+    set #MENUBUTTON N/A
+    finditem PRF_LQF_MQF_QRF C_ , #BACKPACKID
+    if #FINDKIND <> -1
+    {
+      set #LOBJECTID #FINDID
+      event macro 17 0
+      wait 5
+      set #MENUBUTTON N/A
+      event macro 13 9 ; peacemaking
+      target 5s
+      event macro 23 0 ; target self
+    }
+    if %mode = ACTIVE
+    {
+      set %mode READY
+      menu delete EUOButton1
+      menu Button EUOButton1 12 88 75 25 Ready
+    }
+    msg all stop$
+  }
+  if %mode = ACTIVE
+  {
+    gosub HealCreatures
+    gosub CheckGumpHealth 1 ; check gump ID 1
+    set %creature_health1 #RESULT
+    gosub CheckGumpHealth 2 ; check gump ID 2
+    set %creature_health2 #RESULT
+    if %creature_health1 < 15 || %creature_health2 < 15
+    {
+      msg all stop$
+      set %mode HEALUP
+    }
+  }
+  if %mode = HEALUP
+  {
+    gosub HealCreatures
+    if %creature_health1 > 95 && %creature_health2 > 95
+    {
+      set %mode READY
+      set #MENUBUTTON EUOButton1
+    }
+  }
+  if %current_skill <> #skill
+  {
+    set %current_skill #skill
+    set %gain %current_skill - %start_skill
+    gosub ConvertSkill %gain
+    menu set EUOEdit1 #RESULT
+    gosub ConvertSkill #SKILL
+    menu set EUOEdit2 #RESULT
+    set %gain_time #SCNT
+    set %time_diff %gain_time - %start_time
+    set %gain_count %gain_count + 1
+    set %gains_left %target_skill - #SKILL
+    set %time_remaining ( ( ( %time_diff / %gain_count ) * %gains_left ) )
+    gosub ConvertTimeHourMinSec %time_remaining
+    menu set EUOEdit3 #RESULT
+  }
+
+until #FALSE
+;-------------------------------------------------------------------------------
+;-------------------------------------------------------------------------------
+;-------------------------------------------------------------------------------
+sub HealCreatures
+  gosub CheckGumpHealth 1 ; check gump ID 1
+  set %creature_health1 #RESULT
+  menu set EUOEditHealth1 %creature_health1
+  if %creature_health1 < %heal_percentage
+    gosub HealCreature 1
+    
+  gosub CheckGumpHealth 2 ; check gump ID 2
+  set %creature_health2 #RESULT
+  menu set EUOEditHealth2 %creature_health2
+  if %creature_health2 < %heal_percentage
+    gosub HealCreature 2 
+return
+;-------------------------------------------------------------------------------
+sub GetBandages
+  set #LOBJECTID %secure_container
+  event macro 17 ; last object, open container  
+  wait 20
+  finditem ZLF C_ , %secure_container
+  if #FINDCNT > 0
+  {
+    exevent drag #FINDID %1
+    wait 10
+    exevent dropc #BACKPACKID
+    wait 20
+  }
+  else
+  {
+    display ok No more bandages.
+    stop
+  }
+return
+;-------------------------------------------------------------------------------
+; %1 = input - Time to convert
+; #RESULT -  Time converted to #:##:## format
+sub ConvertTimeHourMinSec
+  namespace push
+  namespace local ctime
+  set !hourpart %1 / 3600
+  set !secpart ( %1 % 3600 ) % 60
+  set !minpart ( ( %1 % 3600 ) / 60 )
+
+  set #RESULT !hourpart , :
+  if !minpart < 10
+  {
+    set #RESULT #RESULT , 0
+  }
+  set #RESULT #RESULT , !minpart , :
+  if !secpart < 10
+  {
+    set #RESULT #RESULT , 0
+  }
+  set #RESULT #RESULT , !secpart
+  namespace pop
+return #RESULT
+;------------------------------------------------  
+sub ConvertSkill
+  set %intpart %1 / 10
+  set %decpart %1 % 10
+  set #RESULT %intpart , #dot , %decpart
+return #RESULT
+; ---------------------------------------------------
+sub SetupPetGumps
+  display ok target the gump of the first creature
+  set #TARGCURS 1
+  repeat
+  until #TARGCURS = 0
+  gosub SetupGump 1
+  wait 20
+  display ok target the gump of the second creature
+  set #TARGCURS 1
+  repeat
+  until #TARGCURS = 0
+  gosub SetupGump 2
+return
+; ---------------------------------------------------
+sub TargetCreature
+  namespace push
+  namespace local PHG
+  set !position %1
+  set !name %2
+  set #LTARGETID !contid . !position
+  msg !name , #SPC ,  kill$
+  target 5s
+  event macro 22 0
+  namespace pop
+  wait 30
+return
+; ---------------------------------------------------
+sub SetupGump
+  namespace push
+  namespace local PHG
+  set !position %1
+  set !contposx . !position #CONTPOSX
+  set !contposy . !position #CONTPOSY
+  set !conttype . !position #CONTTYPE
+  set !contid . !position #CONTID
+  namespace pop
+return
+; ---------------------------------------------------
+sub HealCreature
+  namespace push
+  namespace local PHG
+  set !heal_target !contid . %1
+  set %current_id !contid . %1
+  finditem ZLF C_ , #BACKPACKID
+  menu set EUOEditBandages #FINDSTACK
+  if #FINDKIND <> -1
+  {
+    gosub TM_AdvJournalSync HEALING
+    set #LOBJECTID #FINDID
+    set #LTARGETID !heal_target
+    set #LTARGETKIND 1
+    event macro 17 0 ; last object
+    target 5s
+    event macro 22 0 ; last target
+    repeat
+    until #TARGCURS = 0
+    set !heal_timeout #SCNT + 6
+    repeat
+      gosub TM_AdvJournalScan HEALING VALID you_finish_applying that_is_too_far you_heal_what_little fail_to_cure you_have_cured that_being_is_not they_barely_help
+    until #RESULT = #TRUE || #SCNT > !heal_timeout
+  }
+  else
+  {
+    gosub GetBandages 500
+  }
+  namespace pop
+return
+; ---------------------------------------------------
+sub CheckGumpHealth
+  namespace push
+  namespace local PHG
+  set !position %1
+  set !temp_LPC #LPC
+  set #LPC 100
+  set !xstart !contposx . !position + 38
+  set !xend !xstart + 100
+  set !ypos !contposy . !position + 44
+  set !percent 100
+  for !x !xend !xstart
+  {
+    savepix !x !ypos 1
+    if #PIXCOL < 1165536
+      set !percent !percent - 1
+  }
+  set #RESULT !percent
+  set #LPC !temp_LPC
+  namespace pop
+return #RESULT
+;-------------------------------------------------------------------------------
+; %1 - Journal Name
+; %2 - #LPC setting (optional)
+; Brings !_jindex up to the most recent #journal entry
+sub TM_AdvJournalSync
+  namespace push
+  namespace local TM_AdvJS_ , %1
+  set !_jindex #jindex + 1
+  if %0 > 1
+    set !lpc_set %2
+  namespace pop
+  set !TM_FunctionCalled #TRUE
+return
+;-------------------------------------------------------------------------------
+; %1 - Journal Name
+; %2 - NONE, ADVANCE , ( _VALID ) - advances jindex pointer, anything else
+; %3, %4, %5, etc strings to match
+; returns #TRUE for match, #FALSE for no match
+;  Will not advance !_jindex pointer to allow for scanning journal history for more than one search.
+;  Also searches for : , #SPC in journal entry to be sure someone isn't spamming the text
+;  About %2 arguments:
+;    NONE: defaults to basic journal scan (no SPAM checking, no #jindex pointer copy advancing)
+;    ADVANCE: no spam checking, advances #jindex copy
+;    VALID: invokes SPAM filtering, no advance of #jindex copy
+;    VALID_ADVANCE, VALIDADVANCE, ADVANCE_VALID, etc.: invokes SPAM filtering, advances of #jindex copy
+sub TM_AdvJournalScan
+  namespace push
+  namespace local TM_AdvJS_ , %1
+  set !args %2
+  set !temp_lpc #LPC
+  if !lpc_set = N/A
+    set #LPC 1000
+  else
+    set #LPC !lpc_set
+  set !num_args %0
+  set !first_arg 3
+  if !_jindex = N/A
+    set !_jindex #jindex
+  if !charname = N/A
+  {
+    set !charname #CHARNAME
+    AdvJournalScan_loop1:
+      str pos !charname #SPC
+      if #STRRES <> 0
+      {
+        set !val #STRRES - 1
+        str left !charname !val
+        set !left #STRRES
+        set !val !val + 1
+        str del !charname 1 !val
+        set !charname !left , _ , #STRRES
+        goto AdvJournalScan_loop1
+      }
+  }
+  set !index !first_arg
+  repeat
+    set !temp_jindex !_jindex
+    set !text % . !index
+    while !temp_jindex <= #jindex
+    {
+      scanjournal !temp_jindex
+      str pos #JOURNAL !charname 1
+      set !namepos #STRRES
+      str count #JOURNAL !charname
+      set !namecnt #STRRES
+      str pos #JOURNAL :_ 1
+      set !smcpos #STRRES
+      str pos #JOURNAL !text 1
+      set !textpos #STRRES
+      if !textpos < !smcpos && !smcpos <> 0 || !smcpos = 1 || :_ notin #JOURNAL || VALID notin !args
+        set !pass #TRUE
+      else
+        set !pass #FALSE
+      if ( !text in #journal && ( ( !namepos = 1 && !namecnt <= 1 ) || !pass ) )
+      {
+        set !temp_jindex !temp_jindex + 1
+        if ADVANCE in !args
+          set !_jindex !temp_jindex
+        set #LPC !temp_lpc
+        namespace pop
+        set !TM_FunctionCalled #TRUE
+        return #TRUE
+      }
+      set !temp_jindex !temp_jindex + 1
+    }
+    set !index !index + 1
+  until !index - !first_arg > !num_args - !first_arg
+  set #LPC !temp_lpc
+  namespace pop
+  set !TM_FunctionCalled #TRUE
+return #FALSE
+
+;--------- EasyUO Menu Designer Code Begin ---------
+sub showEUOMenu1
+	menu Clear
+	menu Window Title TrailMyx's CrossHealing Vet Trainer
+	menu Window Color BtnFace
+	menu Window Size 299 115
+	menu Font Transparent #true
+	menu Font Align Right
+	menu Font Name MS Sans Serif
+	menu Font Size 8
+	menu Font Style
+	menu Font Color WindowText
+	menu Font Transparent #false
+	menu Font Align Left
+	menu Text EUOLabel1 136 12 Pet Name 1
+	menu Text EUOLabel2 136 36 Pet Name 2
+	menu Text EUOLabel3 252 12 Health
+	menu Text EUOLabel4 252 36 Health
+	menu Text EUOLabel5 56 64 Threshold
+	menu Text EUOLabel6 124 64 Skill
+	menu Text EUOLabel7 184 96 Bandages
+	menu Font BGColor Window
+	menu Edit EUOEditPet1 8 8 121 Pet_name_1
+	menu Edit EUOEditPet2 8 32 121 Pet_name_2
+	menu Font BGColor ScrollBar
+	menu Edit EUOEditHealth1 212 8 37 100
+	menu Edit EUOEditHealth2 212 32 37 100
+	menu Font BGColor BtnFace
+	menu Button EUOButton1 12 88 75 25 Start
+	menu Button EUOButton2 96 88 75 25 Peace
+	menu Font BGColor Window
+	menu Edit EUOEditThreshold 8 60 37 85
+	menu Edit EUOEdit2 148 60 37 90
+	menu Edit EUOEdit1 192 60 37 90
+	menu Edit EUOEdit3 240 60 49 90
+	menu Edit EUOEditBandages 240 92 49 90
+	menu Show 421 270
+return
+;--------- EasyUO Menu Designer Code End ---------
+
+

@@ -1,0 +1,994 @@
+;=================================================================
+; Script Name: TrailMyx's Paperdoll Totalizer
+; Author: TrailMyx
+; Version: 2.2
+; Shard OSI / FS: OSI / FS OK
+; Revision Date: 9/29/2007
+; Purpose: Summarize all stats contained in your paperdoll.
+; Globals:
+;=================================================================
+; Disclaimer:  By running this script, you are accepting the contents of this licence agreement.
+; This script is only authorized to be distributed on www.scriptuo.com  If you purchase this script,
+; acquire it from another website, it is not considered an authorized copy and should be deleted
+; immediately.
+; You hold the author, TrailMyx, and the distribution site www.scriptuo.com not liable for any loss of
+; items, accounts, monitary or time losses associated with the use of this script.  Furthermore, you promise
+; not to distribute or sell this script to anyone without the express permission of the author, Trailmyx.
+; Violation of the contents of this agreement will result in one of the following: litigation, www.scriptuo.com
+; account termination, discimination of bad karma for your next life, and most definitely causing a black mark
+; placed on your soul.
+;
+; I worked very hard to bring this script to you, so please use it responisibily and
+; respectfully.  If you have any questions, please reach me at trailmyx@yahoo.com.
+; (c) 2007 TrailMyx, All rights reserved.
+;===================================================================
+gosub SetupNames
+set %number #RESULT ; number of attributes
+set %container N/A
+set %version 2.3
+gosub showEUOMenu1
+gosub InitializeHTML
+
+set #MENUBUTTON N/A
+set %list3_position 0
+set %tomato_state #TRUE
+set %mode PAPERDOLL
+mainloop:
+  menu get EUOCheckBoxContainer
+  if %mode = PAPERDOLL && #MENURES = #TRUE
+  {
+    set %mode CONTAINER
+    menu set EUOCheckBoxContainer #TRUE
+    menu set EUOCheckPaperdoll #FALSE
+  }
+  menu get EUOCheckPaperdoll
+  if %mode = CONTAINER && #MENURES = #TRUE
+  {
+    set %mode PAPERDOLL
+    menu set EUOCheckBoxContainer #FALSE
+    menu set EUOCheckPaperdoll #TRUE
+  }
+  finditem %container *
+  if #FINDKIND = -1 && %container <> N/A
+  {
+    menu delete EUOButtonSetContainer
+    menu Button EUOButtonSetContainer 192 448 95 21 Set Container
+    set %container N/A
+  }
+
+  if #MENUBUTTON = EUOButtonSetContainer
+  {
+    set #MENUBUTTON N/A
+    set #TARGCURS 1
+    target 5s
+    repeat
+    until #TARGCURS = 0
+    menu delete EUOButtonSetContainer
+    menu Button EUOButtonSetContainer 192 448 95 21 UsSet Container
+    set %container #LTARGETID
+  }
+  
+  if #MENUBUTTON = EUOButton1
+  {
+    set #LPC 10000
+    set #MENUBUTTON N/A
+    menu Font BGColor BtnFace
+    menu delete EUOButton1
+    menu Button EUOButton1 20 420 75 25  Please Wait!
+    menu delete EUOListBox1
+    menu delete EUOListBox2
+    menu delete EUOListBox3
+    namespace push
+    namespace local PIA
+    namespace clear
+    namespace pop
+    menu Font BGColor Window
+    
+	  menu List Create EUOListBox1 4 48 185 365
+	  menu List Create EUOListBox2 192 48 213 157
+	  menu List Create EUOListBox3 192 232 213 181
+    gosub ScanConatiner %number
+    menu Font BGColor BtnFace
+    menu delete EUOButton1
+    menu Button EUOButton1 20 420 75 25  Totalize
+    set #LPC 100
+    set %list3_position 0
+    menu set EUOEditBBC %BBC_string 
+  }
+  
+  if #MENUBUTTON = EUOButton2
+  {
+    gosub CheckDurability
+    set #MENUBUTTON N/A
+  }
+  
+  if #MENUBUTTON = EUOButtonHTML
+  {
+    gosub WriteNewHTMLFile
+    set #MENUBUTTON N/A
+  }
+  
+  menu get EUOListBox3
+  if #MENURES <> %list3_position
+  {
+    set %list3_position #MENURES
+    gosub PrintProperty %list3_position
+  }
+  
+  menu get EUOCheckTomato
+  if #MENURES <> %tomato_state
+  {
+    set %tomato_state #MENURES
+    set #MENUBUTTON EUOButton1
+  }
+  goto mainloop
+;-------------------------------------------------------------------------------
+sub WriteNewHTMLFile
+  gosub InitializeHTML
+  gosub CreateHTMLHandle filehandle
+
+  namespace push
+  namespace local PIA
+  
+  gosub WriteHTMLLineBold Summed , #SPC , Attributes: filehandle
+  set !index 0
+  while !box1_text . !index <> N/A
+  {
+    set !text !box1_text . !index
+    gosub WriteHTMLLine !text filehandle
+    set !index !index + 1
+  }
+  
+  gosub WriteHTMLLineBold Other , #SPC , Attributes: filehandle
+  set !index 0
+  while !box2_text . !index <> N/A
+  {
+    set !text !box2_text . !index
+    gosub WriteHTMLLine !text filehandle
+    set !index !index + 1
+  }
+  
+  gosub WriteHTMLLineBold Specific , #SPC , Items: filehandle
+  set !index 0
+  while !box3_text . !index <> N/A
+  {
+    set !text !box3_text . !index
+    gosub WriteHTMLLine !text filehandle
+    set !index !index + 1
+  }
+
+  menu get EUOEditHTMLFile
+  gosub WriteHTMLFile filehandle #MENURES
+return
+;-------------------------------------------------------------------------------
+sub SetupNames
+  namespace push
+  namespace local SN
+  set #LPC 10000
+;------------------------ Item Attributes
+  set %name START_ITEM_ATTRIBUTES$no$
+  set %name %name , Self_Repair$no$
+  set %name %name , Faster_Casting$yes$
+  set %name %name , Faster_Cast_Recovery$yes$
+  set %name %name , Swing_Speed_Increase$no$
+  set %name %name , Damage_Increase$yes$
+  set %name %name , Hit_Chance_Increase$yes$
+  set %name %name , Hit_Dispel$no$
+  set %name %name , Hit_Lightning$no$
+  set %name %name , Hit_Magic_Arrow$no$
+  set %name %name , Hit_Fireball$no$
+  set %name %name , Hit_Harm$no$
+  set %name %name , Hit_Life_Leech$no$
+  set %name %name , Hit_Mana_Leech$no$
+  set %name %name , Hit_Stamina_Leech$no$
+  set %name %name , Hit_Physical_Area$no$
+  set %name %name , Hit_Fire_Area$no$
+  set %name %name , Hit_Cold_Area$no$
+  set %name %name , Hit_Poison_Area$no$
+  set %name %name , Hit_Energy_Area$no$
+  set %name %name , Hit_Lower_Defense$no$
+  set %name %name , Hit_Lower_Attack$no$
+  set %name %name , Physical_Damage$no$
+  set %name %name , Fire_Damage$no$
+  set %name %name , Cold_Damage$no$
+  set %name %name , Poison_Damage$no$
+  set %name %name , Energy_Damage$no$
+  set %name %name , Hit_Point_Increase$yes$
+  set %name %name , Mana_Increase$yes$
+  set %name %name , Stamina_Increase$yes$
+  set %name %name , Defense_Chance_Increase$yes$
+  set %name %name , Lower_Mana_Cost$yes$
+  set %name %name , Lower_Reagent_Cost$yes$
+  set %name %name , Spell_Damage_Increase$yes$
+  set %name %name , Luck$yes$
+  set %name %name , Mana_Regeneration$yes$
+  set %name %name , Stamina_Regeneration$yes$
+  set %name %name , Hit_Point_Regeneration$yes$
+  set %name %name , Reflect_Physical_Damage$yes$
+  set %name %name , Physical_Resist$yes$
+  set %name %name , Fire_Resist$yes$
+  set %name %name , Cold_Resist$yes$
+  set %name %name , Poison_Resist$yes$
+  set %name %name , Energy_Resist$yes$
+  set %name %name , Strength_Bonus$yes$
+  set %name %name , Dexterity_Bonus$yes$
+  set %name %name , Intelligence_Bonus$yes$
+  set %name %name , Mage_Armor$no$
+  set %name %name , Spell_Channeling$no$
+  set %name %name , Use_Best_Weapon_Skill$no$
+  set %name %name , Mage_Weapon$no$
+  set %name %name , Night_Sight$no$
+  set %name %name , Enhance_Potions$yes$
+  set %name %name , Only_when_full_set_is_present$no$
+  set %name %name , Blessed$no$
+  set %name %name , END_ITEM_ATTRIBUTES$no$
+;------------------------ Skills
+  set %name %name , START_SKILLS$no$
+  set %name %name , Anatomy$yes$
+  set %name %name , Animal_Lore$yes$
+  set %name %name , Animal_Taming$yes$
+  set %name %name , Archery$yes$
+  set %name %name , Bushido$yes$
+  set %name %name , Chivalry$yes$
+  set %name %name , Evaluating_Intelligence$yes$
+  set %name %name , Fencing$yes$
+  set %name %name , Focus$yes$
+  set %name %name , Discordance$yes$
+  set %name %name , Healing$yes$
+  set %name %name , Mace_Fighting$yes$
+  set %name %name , Magery$yes$
+  set %name %name , Magic_Resistance$yes$
+  set %name %name , Meditation$yes$
+  set %name %name , Musicianship$yes$
+  set %name %name , Necromancy$yes$
+  set %name %name , Ninjitsu$yes$
+  set %name %name , Parrying$yes$
+  set %name %name , Peacemaking$yes$
+  set %name %name , Provocation$yes$
+  set %name %name , Spirit_Speak$yes$
+  set %name %name , Stealing$yes$
+  set %name %name , Stealth$yes$
+  set %name %name , Swordsmanship$yes$
+  set %name %name , Tactics$yes$
+  set %name %name , Veterinary$yes$
+  set %name %name , Wrestling$yes$
+  set %name %name , END_SKILLS$no$
+;------------------------ Slayers
+  set %name %name , START_SLAYER_WEAPONS$no$
+  set %name %name , Any_Slayer$no$
+  set %name %name , Air_Elemental_Slayer$no$
+  set %name %name , Arachnid_Slayer$no$
+  set %name %name , Blood_Elemental_Slayer$no$
+  set %name %name , Demon_Slayer$no$
+  set %name %name , Dragon_Slayer$no$
+  set %name %name , Earth_Elemental_Slayer$no$
+  set %name %name , Elemental_Slayer$no$
+  set %name %name , Fire_Elemental_Slayer$no$
+  set %name %name , Gargoyle_Slayer$no$
+  set %name %name , Lizardman_Slayer$no$
+  set %name %name , Ogre_Slayer$no$
+  set %name %name , Ophidian_Slayer$no$
+  set %name %name , Orc_Slayer$no$
+  set %name %name , Poison_Elemental_Slayer$no$
+  set %name %name , Repond_Slayer$no$
+  set %name %name , Reptile_Slayer$no$
+  set %name %name , Scorpion_Slayer$no$
+  set %name %name , Snake_Slayer$no$
+  set %name %name , Snow_Elemental_Slayer$no$
+  set %name %name , Terathan_Slayer$no$
+  set %name %name , Troll_Slayer$no$
+  set %name %name , Undead_Slayer$no$
+  set %name %name , Water_Elemental_Slayer$no$
+  set %name %name , END_SLAYER_WEAPONS$no$
+;------------------------ Talisman
+  set %name %name , START_TALISMAN$no$
+  set %name %name , Talisman_of_Ingots_Summoning$no$
+  set %name %name , Talisman_of_Clean_Bandage_Summoning$no$
+  set %name %name , Alchemy_Exceptional_Bonus$no$
+  set %name %name , Blacksmithing_Exceptional_Bonus$no$
+  set %name %name , Cartography_Exceptional_Bonus$no$
+  set %name %name , Fletching_Exceptional_Bonus$no$
+  set %name %name , Inscription_Exceptional_Bonus$no$
+  set %name %name , Masonry_Exceptional_Bonus$no$
+  set %name %name , Tailoring_Exceptional_Bonus$no$
+  set %name %name , Tinkering_Exceptional_Bonus$no$
+  set %name %name , Cooking_Exceptional_Bonus$no$
+  set %name %name , Alchemy_Bonus$no$
+  set %name %name , Blacksmithing_Bonus$no$
+  set %name %name , Cartography_Bonus$no$
+  set %name %name , Fletching_Bonus$no$
+  set %name %name , Inscription_Bonus$no$
+  set %name %name , Masonry_Bonus$no$
+  set %name %name , Tailoring_Bonus$no$
+  set %name %name , Tinkering_Bonus$no$
+  set %name %name , Cooking_Bonus$no$
+  set %name %name , END_TALISMAN$no$
+
+  set !i 0
+  set !copy %name ; working copy
+  SetupLoop1:
+    str pos !copy $
+    if #STRRES <> 0
+    {
+      set !len #STRRES - 1
+      str left !copy !len
+      set %arg #STRRES
+      if %arg in yes_no
+      {
+        if %arg in yes
+          set %sum . !i #TRUE ; create %sum(!i)
+        else
+          set %sum . !i #FALSE
+      }
+      else
+      {
+        set %name . !i %arg ; create %name(!i)
+        set % . %arg !i ; this is the name(!i) index number
+      }
+      set !len !len + 1
+      str del !copy 1 !len
+      set !copy #STRRES
+      if %arg in yes_no
+        set !i !i + 1
+      goto SetupLoop1
+    }
+  set #RESULT !i - 1
+  namespace pop
+  set #LPC 100
+return #RESULT
+;-------------------------------------------------------------------------------
+sub PrepareContainer
+	menu get EUOCheckBoxContainer
+	if #MENURES = #TRUE
+	{
+    if %container <> N/A
+    {
+      set #LOBJECTID %container
+      event macro 17 0
+      gosub GumpWait container_gump container_gump
+      return %container
+    }
+    else
+    {
+      display ok Please select a container to totalize!
+      return #TRUE
+    }
+	}
+	menu get EUOCheckPaperdoll
+	{
+    event macro 8 1
+    gosub GumpWait paperdoll_gump paperdoll_gump
+    return #CHARID
+	}
+return #TRUE
+;-------------------------------------------------------------------------------
+sub ScanConatiner
+  namespace push
+  namespace local PIA
+  set !number %1
+
+  gosub PrepareContainer
+  if #RESULT = #TRUE
+    return
+  finditem * C_ , #RESULT
+
+  for #FINDINDEX 1 #FINDCNT
+    gosub ParseItemAttributes #FINDID
+
+  set !box1_cnt 0
+  set !box2_cnt 0
+  set !box3_cnt 0
+  
+  set !index 0
+  while !box1_text . !index <> N/A
+  {
+    set !box1_text . !index N/A
+    set !index !index + 1
+  }
+  set !index 0
+  while !box2_text . !index <> N/A
+  {
+    set !box2_text . !index N/A
+    set !index !index + 1
+  }
+  set !index 0
+  while !box3_text . !index <> N/A
+  {
+    set !box3_text . !index N/A
+    set !index !index + 1
+  }
+  set %BBC_string
+  for !i 1 !number
+  {
+    set !index sum , !i
+    set !name name , !i
+    set !name % . !name
+    gosub AddSpace !name
+    set !nametext #RESULT
+    set !val ! . !name
+    if % . !index = #TRUE
+    {
+      if !val <> N/A
+      {
+        menu get EUOCheckTomato
+        if #MENURES = #TRUE
+          set !text !nametext , : , #SPC , !val
+        else
+          set !text !val , #SPC , !nametext
+        set %BBC_string %BBC_string , [li] , !text , [/li]
+        menu list add EUOListBox1 !text
+        set !box1_text . !box1_cnt !text
+        set !box1_cnt !box1_cnt + 1
+      }
+    }
+    else
+    {
+      if !val = yes
+      {
+        menu list add EUOListBox2 !nametext
+        set %BBC_string %BBC_string , [li] , !nametext , [/li]
+        set !box2_text . !box2_cnt !nametext
+        set !box2_cnt !box2_cnt + 1
+      }
+    }
+  }
+  set !item_index !item_index - 1
+  for !i 0 !item_index
+  {
+    gosub AddSpace !itemname . !i
+    if !iteminsured . !i = #TRUE
+      set #RESULT #RESULT , #SPC , -insured
+    if !itemblessed . !i = #TRUE
+      set #RESULT #RESULT , #SPC , -blessed
+    menu list add EUOListBox3 #RESULT
+    set %BBC_string %BBC_string , [li] , #RESULT , [/li]
+    set !box3_text . !box3_cnt #RESULT
+    set !box3_cnt !box3_cnt + 1
+  }
+  namespace pop
+return
+;-------------------------------------------------------------------------------
+sub ParseItemAttributes
+  namespace push
+  namespace local PIA
+  set !item %1
+  event property !item
+  set !str #PROPERTY
+  set !linecount 0
+  set !Only_when_full_set_is_present N/A
+  if !item_index = N/A
+    set !item_index 0
+  ParseItem_loop1:
+    str pos !str $ 1
+    if #STRRES <> 0
+    {
+      set !linecount !linecount + 1
+      set !len #STRRES - 1
+      str left !str !len
+      gosub NewAddUnderscore #STRRES
+      set !substr #RESULT
+      gosub GetIntensityRight !substr !item
+      if !linecount = 1
+        set !title #RESULT
+      set !line_name #RESULT
+      if % . !line_name <> N/A
+      {
+        if !intensity <> N/A
+        {
+          if !Only_when_full_set_is_present = N/A
+          {
+            set !index % . !line_name
+            set !index sum , !index
+            if % . !index = #TRUE
+            {
+              set ! . !line_name ! . !line_name + !intensity
+            }
+            else
+            {
+              set ! . !line_name !intensity
+            }
+          }
+        }
+        else
+        {
+          set ! . !line_name yes
+        }
+      }
+      set !len !len + 1
+      str del !str 1 !len
+      set !str #STRRES
+      goto ParseItem_loop1
+    }
+    if !linecount > 3
+    {
+      set !itemname . !item_index !title
+      if insured in #PROPERTY
+        set !iteminsured . !item_index #TRUE
+      else
+        set !iteminsured . !item_index #FALSE
+      if blessed in #PROPERTY
+        set !itemblessed . !item_index #TRUE
+      else
+        set !itemblessed . !item_index #FALSE
+      set !item_property . !item_index #PROPERTY
+      set !item_index !item_index + 1
+    }
+  namespace pop
+return
+;-------------------------------------------------------------------------------
+sub PrintProperty
+  namespace push
+  namespace local PIA
+  set !line %1 - 1
+  set !property !item_property . !line
+  menu delete EUOListBox2
+	menu Font BGColor Window
+  menu List Create EUOListBox2 192 48 213 157
+  PrintProperty_loop1:
+    str pos !property $
+    if #STRRES <> 0
+    {
+      set !len #STRRES - 1
+      str left !property !len
+      set !text #STRRES
+      set !len !len + 1
+      str del !property 1 !len
+      set !property #STRRES
+      menu List Add EUOListBox2 !text
+      goto PrintProperty_loop1
+    }
+  namespace pop
+return
+;-------------------------------------------------------------------------------
+sub GetIntensityRight
+  namespace push
+  namespace local GIR
+  set !str %1
+  set !item %2
+  str len !str
+  set !ptr #STRRES
+  set !intensity N/A
+  GetIntensityRight_loop1:
+    str mid !str !ptr 1
+    if #STRRES in 0_1_2_3_4_5_6_7_8_9_+_- , %
+    {
+      if ( #STRRES in 0_1_2_3_4_5_6_7_8_9_- ) && ( #STRRES <> _ )
+      {
+        if !intensity = N/A
+          set !intensity #STRRES
+        else
+          set !intensity #STRRES , !intensity
+      }
+      set !ptr !ptr - 1
+      if !ptr > 0
+        goto GetIntensityRight_loop1
+    }
+  str mid !str 1 !ptr
+  set #RESULT #STRRES
+  namespace copy intensity to local PIA
+  namespace pop
+return #RESULT
+;-------------------------------------------------------------------------------
+; %1 - string to mung, removes spaces, minuses and colons
+sub NewAddUnderscore
+  namespace push
+  namespace local AU
+  set !tempstring %1
+  NewAddUnderscore_loop1:
+    str pos !tempstring #SPC
+    if #STRRES <> 0
+    {
+      set !val #STRRES - 1
+      str left !tempstring !val
+      set !left #STRRES
+      set !val !val + 1
+      str del !tempstring 1 !val
+      set !tempstring !left , _ , #STRRES
+      goto NewAddUnderscore_loop1
+    }
+    str pos !tempstring :
+    if #STRRES <> 0
+    {
+      set !val #STRRES - 1
+      str left !tempstring !val
+      set !left #STRRES
+      set !val !val + 1
+      str del !tempstring 1 !val
+      set !tempstring !left , _ , #STRRES
+      goto NewAddUnderscore_loop1
+    }
+  set #RESULT !tempstring
+  namespace pop
+return #RESULT
+;-------------------------------------------------------------------------------
+; %1 - string to mung
+sub AddSpace
+  namespace push
+  namespace local AS
+  set !tempstring %1
+  AddSpace_loop1:
+    str pos !tempstring _
+    if #STRRES <> 0
+    {
+      set !val #STRRES - 1
+      str left !tempstring !val
+      set !left #STRRES
+      set !val !val + 1
+      str del !tempstring 1 !val
+      set !tempstring !left , #SPC , #STRRES
+      goto AddSpace_loop1
+    }
+  set #RESULT !tempstring
+  namespace pop
+return #RESULT
+;-------------------------------------------------------
+sub CheckDurability
+  namespace push
+  namespace local CD
+  set !temp_LPC #LPC
+  set #LPC 10000
+  menu delete EUOListBox2
+	menu Font BGColor Window
+  menu List Create EUOListBox2 192 48 213 157
+  menu delete EUOButton2
+ 	menu Font BGColor BtnFace
+	menu Button EUOButton2 104 420 75 25 Checking...
+	set !repair_count 0
+  set !searchfor Durability , #SPC
+  gosub PrepareContainer
+  if #RESULT = -1
+  {
+    namespace pop
+    return
+  }
+  finditem * C_ , #RESULT
+  for #FINDINDEX 1 #FINDCNT
+  {
+    set !item #FINDID
+    event property !item
+    if !searchfor in #PROPERTY
+    {
+      gosub TM_CheckMaxDurability !item
+      set !max #RESULT
+      gosub TM_CheckCurrentDurability !item
+      set !current #RESULT
+      gosub TM_GetItemName !item
+      if #RESULT <> #TRUE
+      {
+        set !name #RESULT
+        set !percent !current * 100 / !max
+        menu get EUOEditPercentage
+        set !warning_percentage #MENURES
+        if !percent <= !warning_percentage
+        {
+          set !warnstring !name , : , #SPC , !current , / , !max
+          menu List Add EUOListBox2 !warnstring
+          set !repair_count !repair_count + 1
+        }
+      }
+    }
+  }
+  if !repair_count = 0
+  {
+    menu List Add EUOListBox2 All items at , #SPC , !warning_percentage , % , #SPC , or , #SPC , better
+  }
+  menu delete EUOButton2
+ 	menu Font BGColor BtnFace
+	menu Button EUOButton2 104 420 75 25 Repair Check
+	set #LPC !temp_LPC
+  namespace pop
+return
+;-------------------------------------------------------
+; %1 = #FINDID of item to evaluate
+sub TM_CheckCurrentDurability
+  namespace push
+  namespace local CMD
+  set !item %1
+  event property !item
+  set !property #PROPERTY
+  set !search Durability , #SPC
+  str count !property !search
+  if #STRRES > 1
+  {
+    str pos !property !search #STRRES
+    set #STRRES #STRRES - 1
+    str del !property 1 #STRRES
+    set !property #STRRES
+  }
+  str pos !property !search 1
+  set #STRRES #STRRES + 10
+  str del !property 1 #STRRES ; 87 / 87$
+  set !temp #STRRES
+  str pos #STRRES / 1
+  set #STRRES #STRRES - 2
+  str left !temp #STRRES
+  set #RESULT #STRRES
+  namespace pop
+return #RESULT
+;-------------------------------------------------------
+; %1 = #FINDID of item to evaluate
+sub TM_CheckMaxDurability
+  namespace push
+  namespace local CCD
+  set !item %1
+  event property !item
+  set !property #PROPERTY
+  set !search Durability , #SPC
+  str count !property !search
+  if #STRRES > 1
+  {
+    str pos !property !search #STRRES
+    set #STRRES #STRRES - 1
+    str del !property 1 #STRRES
+    set !property #STRRES
+  }
+  str pos !property !search 1
+  set #STRRES #STRRES + 10
+  str del !property 1 #STRRES ; 87 / 87$
+  set !temp #STRRES
+  str pos #STRRES / 1
+  str del !temp 1 #STRRES
+  set !temp #STRRES
+  str pos #STRRES $ 1
+  set #STRRES #STRRES - 1
+  str left !temp #STRRES
+  set #RESULT #STRRES
+  namespace pop
+return #RESULT
+;-------------------------------------------------------------------------------
+sub TM_GetItemName
+  namespace push
+  namespace local GIN
+  set !item %1
+  set !timeout #SCNT + 2
+  event property !item
+  str len #PROPERTY
+  if #STRRES <= 1
+  {
+    namespace pop
+    return #TRUE
+  }
+  str pos #PROPERTY $
+  set #STRRES #STRRES - 1
+  str left #PROPERTY #STRRES
+  set !tempstr #STRRES
+  set #RESULT !tempstr
+  str pos #PROPERTY :
+  if #STRRES > 0
+  {
+    set #STRRES #STRRES - 1
+    str left !tempstr #STRRES
+    set #RESULT #STRRES
+  }
+  namespace pop
+return #RESULT
+;---------------------------------------------------
+sub InitializeHTML
+  namespace push
+  namespace local HTML
+  set !header ^<html^>^<body^>
+  set !footer ^</body^>^</html^>
+  set !bodystart ^<p , #SPC , style="margin-top:0;margin-bottom:0"^>^<b^>^<font , #SPC , size="4"^>
+  set !endbodystart ^</font^>^</b^>^</p^>
+  set !body ^<p , #SPC , style="margin-top:0;margin-bottom:0"^>
+  set !endbody ^</p^>
+  set !maxlinelength 2000
+  set !tablestart ^<table , #SPC , border="1" , #SPC , cellpadding="0" , #SPC , cellspacing="0" , #SPC , style="border-collapse: , #SPC , collapse" , #SPC , bordercolor="#111111" , #SPC , width="100%" , #SPC , id="AutoNumber1"^>
+  set !tableend ^</table^>
+  set !tablewidth 50
+  set !tablerowstart ^<tr^>
+  set !tablerowend ^</tr^>
+  set !tableentrystart ^<td , #SPC , width=" , !tablewidth , %"^>
+  set !tableentryend ^</td^>
+  set !tableinprogress #FALSE
+  namespace pop
+return
+;---------------------------------------------------
+sub WriteHTMLTableLine
+  namespace push
+  namespace local HTML
+  set !handle %1
+  set !numargs %0
+  if !tableinprogress = #FALSE
+  {
+    set ! . !handle ! . !handle , !tablestart
+    set !tableinprogress #TRUE
+  }
+  set ! . !handle ! . !handle , !tablerowstart
+  set !i 2
+  WriteHTMLTableLine_loop1:
+    gosub SetHTMLTableColumnWidth % . !i
+    set !i !i + 1
+    set ! . !handle ! . !handle , !tableentrystart , % . !i , !tableentryend
+    set !i !i + 1
+    if !i <= !numargs
+      goto WriteHTMLTableLine_loop1
+
+  set ! . !handle ! . !handle , !tablerowend
+  namespace pop
+return
+;---------------------------------------------------
+sub SetHTMLTableColumnWidth
+  namespace push
+  namespace local HTML
+  set !tablewidth %1
+  set !tableentrystart ^<td , #SPC , width=" , !tablewidth , %"^>
+  namespace pop
+return
+;---------------------------------------------------
+sub HTMLEndtable
+  namespace push
+  namespace local HTML
+  set !handle %1
+  set !tableinprogress #FALSE
+  set ! . !handle ! . !handle , !tableend
+  namespace pop
+return
+;---------------------------------------------------
+sub CreateHTMLHandle
+  namespace push
+  namespace local HTML
+  set !handle %1
+  set ! . !handle
+  namespace pop
+return
+;---------------------------------------------------
+sub WriteHTMLLine
+  namespace push
+  namespace local HTML
+  set !value %1
+  set !handle %2
+  set ! . !handle ! . !handle , !body , !value , !endbody
+  namespace pop
+return
+;---------------------------------------------------
+sub WriteHTMLLineBold
+  namespace push
+  namespace local HTML
+  set !value %1
+  set !handle %2
+  set ! . !handle ! . !handle , !bodystart , !value , !endbodystart
+  namespace pop
+return
+;---------------------------------------------------
+sub WriteHTMLProperty
+  namespace push
+  namespace local HTML
+  set !property %1
+  set !handle %2
+  set #LPC 10000
+  set !htmlline 1
+
+  WriteHTMLProperty_loop1:
+    str pos !property $ 1
+    if #STRRES <> 0
+    {
+      set !loc #STRRES - 1
+      str left !property !loc
+      set !string #STRRES
+      if !htmlline = 1
+        set ! . !handle ! . !handle , !bodystart , !string , !endbodystart
+      else
+        set ! . !handle ! . !handle , !body , !string , !endbody
+      set !loc !loc + 1
+      str del !property 1 !loc
+      set !property #STRRES
+      set !htmlline !htmlline + 1
+      goto WriteHTMLProperty_loop1
+    }
+  set #LPC 10
+  set #RESULT !property
+  namespace pop
+return #RESULT
+;---------------------------------------------------
+sub WriteHTMLFile
+  namespace push
+  namespace local HTML
+  set !file %1
+  set !tempfile %2
+  set !line 1
+  set !paragraphcnt 0
+  set !end #FALSE
+  set !file ! . !handle
+
+  WriteHTMLFile_loop1:
+    str pos !file ^</p^> !paragraphcnt
+    if #STRRES = 0
+      goto WriteHTMLFile_skip1
+    if #STRRES < !maxlinelength
+    {
+      set !paragraphcnt !paragraphcnt + 1
+      goto WriteHTMLFile_loop1
+    }
+  WriteHTMLFile_skip1:
+    if #STRRES = 0
+    {
+      str len !file
+      set !len #STRRES
+      set !end #TRUE
+    }
+    else
+    {
+      set !paragraphcnt !paragraphcnt - 1
+      str pos !file ^</p^> !paragraphcnt
+      set !len #STRRES + 5 ; length of termination too
+    }
+    str left !file !len
+    if !line = 1
+    {
+      execute cmd.exe /c echo #STRRES > !tempfile
+      str len !file
+      set !maxfilesize #STRRES
+    }
+    else
+    {
+      execute cmd.exe /c echo #STRRES >> !tempfile
+      str len !file
+    }
+    set !line !line + 1
+    str del !file 1 !len
+    set !file #STRRES
+    if !end = #TRUE
+      goto WriteHTMLFile_end
+    set !paragraphcnt 0
+    goto WriteHTMLFile_loop1
+
+WriteHTMLFile_end:
+  namespace pop
+return
+;----------------------------------------
+sub GumpWait
+  wait 10
+  set %timedelay #SCNT
+  loopwait1:
+    if #CONTNAME = %1 || #CONTNAME = %2
+      return
+    if #SCNT > %timedelay + 7
+      return
+    goto loopwait1
+return
+;--------- EasyUO Menu Designer Code Begin ---------
+sub showEUOMenu1
+	menu Clear
+	menu Window Title TrailMyx's Paperdoll Totalizer v , %version
+	menu Window Color BtnFace
+	menu Window Size 456 474
+	menu Font Transparent #true
+	menu Font Align Right
+	menu Font Name MS Sans Serif
+	menu Font Size 8
+	menu Font Style
+	menu Font Color WindowText
+	menu Font Transparent #false
+	menu Font Align Left
+	menu Text EUOLabel1 8 32 Summed Attributes:
+	menu Text EUOLabel2 196 32 Other Attributes:
+	menu Text EUOLabel3 196 216 Items:
+	menu Text EUOLabel4 188 424 Repair Warning
+	menu Text EUOLabel5 292 424 %
+	menu Text EUOLabel6 8 8 HTML File out
+  menu Text EUOLabel7 272 8 BBC:
+	menu Button EUOButton1 20 420 75 25 Totalize
+	menu Font BGColor Window
+	menu List Create EUOListBox1 4 48 185 365
+	menu List Create EUOListBox2 192 48 213 157
+	menu List Create EUOListBox3 192 232 213 181
+	menu Font BGColor BtnFace
+	menu Button EUOButton2 104 420 75 25 Repair Check
+	menu Font BGColor Window
+	menu Edit EUOEditPercentage 264 420 25 80
+	menu Font BGColor BtnFace
+	menu Check EUOCheckTomato 316 424 97 17 #true Tomato?
+	menu Font BGColor Window
+	menu Edit EUOEditHTMLFile 80 4 121 html_output.html
+	menu Font BGColor BtnFace
+	menu Button EUOButtonHTML 208 4 55 21 Generate
+	menu Check EUOCheckPaperdoll 4 448 81 17 #true PaperDoll
+	menu Check EUOCheckBoxContainer 108 448 77 17 #false Container
+	menu Button EUOButtonSetContainer 192 448 95 21 Set Container
+	menu Font BGColor Window
+	menu Edit EUOEditBBC 300 4 109
+	menu Show 421 270
+return
+;--------- EasyUO Menu Designer Code End ---------
+

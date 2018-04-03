@@ -1,0 +1,228 @@
+;======================================
+; Script Name: XIIxOveR's SuperStuff
+; Author: XIIxOveR
+; Version: 1.0
+; Shard OSI/FS: OSI
+; Revision Date: June-2010
+; Purpose: Misc Helper
+;=================================================
+; So many repetitive things to do, so little time!
+; Superstuff is a menu driven "macro" interface to
+; more quickly perform small tasks including:
+;    Eating all itemtypes in a container
+;    Moving items from one container to another
+;    Getting tile or object information
+;    Hiding items on a vendor to see items underneath
+;    Managing Secures
+;
+; If you have any ideas of these mini-tasks that
+; you would like considered for future addition
+; PM the author at ScriptUO.com!
+;=================================================
+; Instructions:
+;    1) Run script
+;    2) Place menu wherever you like it
+;    3) Press the applicable menu button
+;
+;=========================================================================
+gosub DisplayXIIxStuffMenu
+set #menubutton n/a
+
+repeat
+   if #menubutton <> n/a
+      {
+      gosub #menubutton
+      set #menubutton n/a
+      }
+until #FALSE
+;=========================================================================
+;####################
+;SUB XIIxStuffHelp
+;####################
+sub XIIxStuffHelp
+   Display XIIxOveR's SuperStuff User Guide$
+   + $
+      + 1) Move Stuff:$
+      + , #spc , #spc , #spc , Moves items of a selected type from one container to another. Select$
+      + , #spc , #spc , #spc , the item to move and the container to move it to and the script will$
+      + , #spc , #spc , #spc , move all items of that type from any open container to the selected$
+      + , #spc , #spc , #spc , target container.$
+      + 2) Info Stuff:$
+      + , #spc , #spc , #spc , Gives detailed information about a targeted item.$
+      + 3) Hide Stuff:$
+      + , #spc , #spc , #spc , Ever see an item on SearchUO but get to the vendor and not find it$
+      + , #spc , #spc , #spc , because it's hiding under another item? Well select Hide Stuff and$
+      + , #spc , #spc , #spc , keep targeting items to make them disappear!$
+      + 4) Tile Stuff:$
+      + , #spc , #spc , #spc , Tile Stuff simply gives all the tile information on the tile the toon$
+      + , #spc , #spc , #spc , is standing on. Not useful to everyone but handy when troubleshooting,$
+      + , #spc , #spc , #spc , say, a mining script :-)$
+      + 5) Eat Stuff:$
+      + , #spc , #spc , #spc , By request of XIIxOveR! This is meant for eating things that don't fill$
+      + , #spc , #spc , #spc , you up, like those PESKY boxes of chocolate we got for Valentines Day!$
+      + , #spc , #spc , #spc , If you select food that fills you up it will loop indefinitely once full.$
+      + 6) Secure/Release/Lockdown Stuff:$
+      + , #spc , #spc , #spc ,  Ever get tired of typing these commands or setting a macro to do them$
+      + , #spc , #spc , #spc ,  for you? XIIxOveR did. As simple as click and target!$
+      + 7) Help - Displays this help message.$
+      + $
+      + More to come!
+return
+
+;####################
+;SUB XIIxStuffMove
+;####################
+sub XIIxStuffMove
+   Display Target Item Type To Move
+   set #targcurs 1
+   while #targcurs = 1
+         wait 1
+   set %ItemType #ltargetid
+   finditem %ItemType
+   set %ItemToMove #findtype
+
+   Display Container To Move It To
+   set #targcurs 1
+   while #targcurs = 1
+         wait 1
+   set %PlaceToMoveIt #ltargetid
+
+   finditem %ItemToMove C_
+   while #findcnt > 0
+      {
+      finditem %ItemToMove C_
+      exevent drag #findid
+      wait 10
+      exevent dropc %PlaceToMoveIt
+      wait 10
+      }
+   if #findkind = -1
+      {
+      Display Move of items complete!
+      set %ItemType
+      set %ItemToMove
+      set %PlaceToMoveIt
+      return
+      }
+return
+
+;####################
+;SUB XIIxStuffInfo
+;####################
+sub XIIxStuffInfo
+   Display Target Item
+   set #targcurs 1
+   while #targcurs = 1
+         wait 1
+   set %Item #ltargetID
+   finditem %Item
+   set %ItemType #findtype
+   event property %Item
+   Display OK Object Information:$
+      + , #spc , #spc , #spc , Item Type: %ItemType $
+      + , #spc , #spc , #spc , Item ID: #ltargetid $
+      + , #spc , #spc , #spc , Color: #findcol $
+      + , #spc , #spc , #spc , Properties: #property $
+return
+
+;####################
+;SUB XIIxStuffHide
+;####################
+sub XIIxStuffHide
+   Display Target item to ignore
+   set #targcurs 1
+   while #targcurs = 1
+      wait 1
+   set %ignorenext #ltargetID
+   hideitem %ignorenext
+return
+
+;####################
+;SUB XIIxStuffTile
+;####################
+sub XIIxStuffTile
+   set %x #charposx
+   set %y #charposy
+
+   tile init
+   tile cnt %x %y
+
+   for %tcnt 1 #tilecnt
+      {
+      tile get %x %y %tcnt
+      display Tile Information: $
+      + #spc , #spc , Coordinates: %x ,  x  , %y ,  x  #tilez $
+      + #spc , #spc , Layer #: %tcnt $
+      + #spc , #spc , Tile Type: #Tiletype $
+      + #spc , #spc , Tile Name: #tilename $
+      + #spc , #spc , Tile Kind: #ltargetkind $
+      }
+return
+
+;####################
+;SUB XIIxStuffEat
+;####################
+sub XIIxStuffEat
+   Display Target Item Type To eat
+   set #targcurs 1
+   while #targcurs = 1
+         wait 1
+   set %ItemType #ltargetid
+   finditem %ItemType
+   set %ItemToEat #findtype
+
+   repeat
+      finditem %ItemToEat C_
+      set #lobjectid #findid
+      event macro 17 0
+      wait 20
+   until #findkind = -1
+   Display Eating of items complete!
+return
+
+;####################
+;SUB XIIxStuffSecure
+;####################
+sub XIIxStuffSecure
+   event macro 1 0 I wish to secure this
+return
+
+;####################
+;SUB XIIxStuffRelease
+;####################
+sub XIIxStuffRelease
+   event macro 1 0 I wish to release this
+return
+
+;####################
+;SUB XIIxStuffLock
+;####################
+sub XIIxStuffLock
+   event macro 1 0 I wish to lock this down
+return
+
+;#######################
+;SUB DisplayXIIxStuffMenu
+;#######################
+sub DisplayXIIxStuffMenu
+	menu Clear
+	menu Window Title XIIxOveR's SuperStuff
+	menu Window Color Black
+	menu Window Size 705 35
+	menu Font Transparent #true
+	menu Font Align Right
+	menu Font Name MS Sans Serif
+	menu Font Size 7
+	menu Font Style 
+	menu Font Color WindowText
+	menu Button XIIxStuffMove 5 5 65 25 Move Stuff
+	menu Button XIIxStuffHide 75 5 65 25 Hide Stuff
+	menu Button XIIxStuffInfo 145 5 65 25 Info Stuff
+	menu Button XIIxStuffTile 215 5 65 25 Tile Stuff
+	menu Button XIIxStuffEat 285 5 65 25 Eat Stuff
+	menu Button XIIxStuffSecure 355 5 65 25 Secure
+	menu Button XIIxStuffRelease 425 5 65 25 Release
+	menu Button XIIxStuffLock 495 5 65 25 Lockdown
+	menu Button XIIxStuffHelp 635 5 65 25 Help
+	menu Show 700 0
+return

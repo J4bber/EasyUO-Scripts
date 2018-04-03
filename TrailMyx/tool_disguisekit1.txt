@@ -1,0 +1,176 @@
+;=================================================================
+; Script Name: TrailMyx's Disguise Kit Commander
+; Author: TrailMyx
+; Version: 1.0
+; Shard OSI / FS: OSI / FS OK
+; Revision Date: 7/29/2008
+; Purpose: A few routines to manage your disguise kit
+;   Routines:
+;     gosub TM_PeriodicDisguise 10 ; setup TM_PeriodicDisguise to change your disguise every 10 seconds
+;     gosub TM_PeriodicDisguise ; call witout argument to test and see if disguise should chainge
+;     gosub TM_RandomHairStyle ; no args, just grabs a random new hairstyle
+;     gosub TM_ChangeHairStyle {arg} ; where {arg} can be SHORT LONG PONYTAIL MOHAWK PAGEBOY RECEDING 2-TAILS TOPKNOT NONE
+;     gosub TM_OpenDisguiseKit ; just finds and opens your disguise kit (retains your set value of #LOBJECTID
+; Globals:
+; Special Thanks:
+;
+; Beta testers:
+;
+;=================================================================
+; Disclaimer:  By running this script, you are accepting the contents of this licence agreement.
+; This script is only authorized to be distributed on www.scriptuo.com.  If you purchase this script,
+; acquire it from another website, it is not considered an authorized copy and should be deleted
+; immediately.
+; You hold the author, TrailMyx, and the distribution site www.scriptuo.com not liable for any loss of
+; items, accounts, monitary or time losses associated with the use of this script.  Furthermore, you promise
+; not to distribute or sell this script to anyone without the express permission of the author, Trailmyx.
+; Violation of the contents of this agreement will result in one of the following: litigation, www.scriptuo.com
+; account termination, discimination of bad karma for your next life, and most definitely causing a black mark
+; placed on your soul.
+;
+; I worked very hard to bring this script to you, so please use it responisibily and
+; respectfully.  If you have any questions, please reach me at trailmyx@scriptuo.com.
+; (c) 2007, 2008 TrailMyx, All rights reserved.
+;===================================================================
+
+; Test code!!!
+gosub TM_PeriodicDisguise 10 ; every 10 seconds
+repeat
+  gosub TM_PeriodicDisguise
+until #FALSE
+;=================================================================
+;=================================================================
+sub TM_PeriodicDisguise
+  namespace push
+  namespace local PD
+  if %0 = 0
+  {
+    if !timer = N/A
+    {
+      set !timerval 3600
+      set !timer #SCNT + !timerval ; defaults to 1 hour
+    }
+  }
+  else
+  {
+    set !timer #SCNT + %1 ; units in seconds
+    set !timerval %1
+  }
+  if #SCNT > !timer
+  {
+    gosub TM_RandomHairStyle
+    set !timer #SCNT + !timerval
+  }
+  namespace pop
+return
+;-----------------------------------------------------------------------
+sub TM_RandomHairStyle
+  namespace push
+  namespace local RHS
+  set !random #RANDOM % 9
+  set !random !random + 1
+  if !random = 1
+    set !style SHORT
+  if !random = 2
+    set !style LONG
+  if !random = 3
+    set !style PONYTAIL
+  if !random = 4
+    set !style MOHAWK
+  if !random = 5
+    set !style PAGEBOY
+  if !random = 6
+    set !style RECEDING
+  if !random = 7
+    set !style 2-TAILS
+  if !random = 8
+    set !style TOPKNOT
+  if !random = 9
+    set !style NONE
+  gosub TM_ChangeHairStyle !style
+  namespace clear
+  namespace pop
+return
+;-----------------------------------------------------------------------
+sub TM_ChangeHairStyle
+  namespace push
+  namespace local CHS
+  set !style %1
+  gosub TM_OpenDisguiseKit
+  if #RESULT = #FALSE ; no error
+  {
+    if SHORT in !style
+      gosub OffsetClick 124 82 dmc
+    if LONG in !style
+      gosub OffsetClick 127 137 dmc
+    if PONYTAIL in !style
+      gosub OffsetClick 125 193 dmc
+    if MOHAWK in !style
+      gosub OffsetClick 127 248 dmc
+    if PAGEBOY in !style
+      gosub OffsetClick 330 80 dmc
+    if RECEDING in !style
+      gosub OffsetClick 332 140 dmc
+    if 2-TAILS in !style
+      gosub OffsetClick 332 193 dmc
+    if TOPKNOT in !style
+      gosub OffsetClick 332 248
+    if NONE in !style
+      gosub OffsetClick 332 302
+    wait 5
+    gosub OffsetClick 270 365 dmc ; apply
+    gosub GumpAndSizeWait generic_gump 622_427
+    gosub OffsetClick 154 363 dmc ; okey
+  }
+  namespace clear
+  namespace pop
+return #RESULT
+;-----------------------------------------------------------------------
+sub OffsetClick
+  namespace push
+  namespace local OC
+  set !clickx #CONTPOSX + %1
+  set !clicky #CONTPOSY + %2
+  if %3 = 3
+    click !clickx !clicky %3
+  else
+    click !clickx !clicky
+  namespace clear
+  namespace pop
+return
+;-----------------------------------------------------------------------
+sub TM_OpenDisguiseKit
+  namespace push
+  namespace local ODK
+  set !lobjectid #LOBJECTID
+  finditem PKF C_ , #BACKPACKID
+  set #RESULT #FALSE
+  if #FINDKIND <> -1
+  {
+    set #LOBJECTID #FINDID
+    event macro 17 0
+    gosub GumpAndSizeWait generic_gump 622_427
+  }
+  set #LOBJECTID !lobjectid
+  namespace pop
+return #RESULT
+;-----------------------------------------------------------------------
+; gosub GumpAndSizeWait generic_menu 200_200 20
+; %1 = contname
+; %2 = contsize
+; %3 = timeout (defaults to 5 seconds if left blank.)
+sub GumpAndSizeWait
+  namespace push
+  namespace local GASW
+  set #RESULT #FALSE
+  if %3 > 0 && %0 > 2
+    set !delay #SCNT + %3
+  else
+    set !delay #SCNT + 5 ; 5 seconds default
+  wait 5
+  repeat
+  until ( #CONTNAME = %1 && #CONTSIZE = %2 ) || #SCNT > !delay
+  if #SCNT > !delay
+    set #RESULT #TRUE ; error
+  namespace pop
+return #RESULT

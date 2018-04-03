@@ -1,0 +1,301 @@
+;-----------------------------------------------------------
+; Script Name: TrailMyx's Pet Gump Healing
+; Author: TrailMyx
+; Version: 1.1
+; Client Tested with: 5.0.9
+; EUO version tested with: 1.5 109
+; Shard: OSI, FS
+; Revision Date:  3/26/2007
+; Public Release: ...
+; Global Variables Used: None
+; Purpose/Features:
+;   This will attempt to pull up your pet's healthbar and heal according to 
+;   %heal_percentage
+;-----------------------------------------------------------
+
+set %target_id1 XXYYZZ1
+set %heal_percentage 91
+; 100% - 138,44
+;   0% = 38, 44
+gosub showEUOMenu1
+gosub TM_AdvJournalSync HEALING 100
+
+loop1:
+  gosub PositionHealthGump %target_id1 0 0 0 4
+  if #RESULT <> #FALSE
+    ignoreitem #FINDID
+  gosub CheckGumpHealth 0 ; check gump ID 0
+  menu set EUOEdit1 #RESULT
+  if #RESULT < %heal_percentage
+    gosub HealCreature %target_id1
+  goto loop1
+
+stop
+; ---------------------------------------------------------------------------
+; %1 = heal target ID
+sub HealCreature
+  namespace push
+  namespace local HC
+  set !heal_target %1
+  finditem ZLF C_ , #BACKPACKID
+  if #FINDKIND <> -1
+  {
+    gosub TM_AdvJournalSync HEALING
+    set #LOBJECTID #FINDID
+    set #LTARGETID !heal_target
+    set #LTARGETKIND 1
+    event macro 17 0 ; last object
+    target 5s
+    event macro 22 0 ; last target
+    repeat
+    until #TARGCURS = 0
+    set !heal_timeout #SCNT + 6
+    repeat
+      gosub TM_AdvJournalScan HEALING VALID you_finish_applying that_is_too_far you_heal_what_little fail_to_cure you_have_cured that_being_is_not
+    until #RESULT = #TRUE || #SCNT > !heal_timeout
+  }
+  else
+  {
+    display ok No more bandages!
+  }
+return
+; ---------------------------------------------------
+sub CheckGumpHealth
+  namespace push
+  namespace local PHG
+  set !position %1
+  set !temp_LPC #LPC
+  set #LPC 100
+  set !xstart !contposx . !position + 38
+  set !xend !xstart + 100
+  set !ypos !contposy . !position + 44
+  set !percent 100
+  for !x !xend !xstart
+  {
+    savepix !x !ypos 1
+    if #PIXCOL < 1165536
+      set !percent !percent - 1
+  }
+  set #RESULT !percent
+  set #LPC !temp_LPC
+  namespace pop
+return #RESULT
+; ---------------------------------------------------
+sub PositionHealthGump
+  namespace push
+  namespace local PHG
+  set !temp_LPC #LPC
+  set #LPC 10000
+  set !findid %1
+  set !position %2
+  set !xadj %3
+  set !yadj %4
+  set !range %5
+  set !result #FALSE
+  finditem !findid G_ , !range
+  if #FINDKIND <> -1
+  {
+    gosub LocateScreenCoords #FINDX #FINDY !xadj !yadj
+    click %1 %2 g
+    gosub GumpWait status_gump NULL
+    set !clickx 600 + 160 * !position
+    click !clickx 650 mc
+    if #FINDTYPE = #CONTTYPE
+    {
+      set !contposx . !position #CONTPOSX
+      set !contposy . !position #CONTPOSY
+      set !conttype . !position #CONTTYPE
+      set !result #TRUE
+    }
+  }
+  set #LPC !temp_LPC
+  set #RESULT !result
+  namespace pop
+return #RESULT
+; ---------------------------------------------------
+sub GumpWait
+  wait 10
+  set %timedelay #SCNT
+  loopwait1:
+    if #CONTNAME = %1 || #CONTNAME = %2
+      return
+    if #SCNT > %timedelay + 7
+      return
+    goto loopwait1
+return
+;-------------------------------------------------------------------------------
+; %1 - Journal Name
+; %2 - #LPC setting (optional)
+; Brings !_jindex up to the most recent #journal entry
+sub TM_AdvJournalSync
+  namespace push
+  namespace local TM_AdvJS_ , %1
+  set !_jindex #jindex + 1
+  if %0 > 1
+    set !lpc_set %2
+  namespace pop
+  set !TM_FunctionCalled #TRUE
+return
+;-------------------------------------------------------------------------------
+; %1 - Journal Name
+; %2 - NONE, ADVANCE , ( _VALID ) - advances jindex pointer, anything else
+; %3, %4, %5, etc strings to match
+; returns #TRUE for match, #FALSE for no match
+;  Will not advance !_jindex pointer to allow for scanning journal history for more than one search.
+;  Also searches for : , #SPC in journal entry to be sure someone isn't spamming the text
+;  About %2 arguments:
+;    NONE: defaults to basic journal scan (no SPAM checking, no #jindex pointer copy advancing)
+;    ADVANCE: no spam checking, advances #jindex copy
+;    VALID: invokes SPAM filtering, no advance of #jindex copy
+;    VALID_ADVANCE, VALIDADVANCE, ADVANCE_VALID, etc.: invokes SPAM filtering, advances of #jindex copy
+sub TM_AdvJournalScan
+  namespace push
+  namespace local TM_AdvJS_ , %1
+  set !args %2
+  set !temp_lpc #LPC
+  if !lpc_set = N/A
+    set #LPC 1000
+  else
+    set #LPC !lpc_set
+  set !num_args %0
+  set !first_arg 3
+  if !_jindex = N/A
+    set !_jindex #jindex
+  if !charname = N/A
+  {
+    set !charname #CHARNAME
+    AdvJournalScan_loop1:
+      str pos !charname #SPC
+      if #STRRES <> 0
+      {
+        set !val #STRRES - 1
+        str left !charname !val
+        set !left #STRRES
+        set !val !val + 1
+        str del !charname 1 !val
+        set !charname !left , _ , #STRRES
+        goto AdvJournalScan_loop1
+      }
+  }
+  set !index !first_arg
+  repeat
+    set !temp_jindex !_jindex
+    set !text % . !index
+    while !temp_jindex <= #jindex
+    {
+      scanjournal !temp_jindex
+      str pos #JOURNAL !charname 1
+      set !namepos #STRRES
+      str count #JOURNAL !charname
+      set !namecnt #STRRES
+      str pos #JOURNAL :_ 1
+      set !smcpos #STRRES
+      str pos #JOURNAL !text 1
+      set !textpos #STRRES
+      if !textpos < !smcpos && !smcpos <> 0 || !smcpos = 1 || :_ notin #JOURNAL || VALID notin !args
+        set !pass #TRUE
+      else
+        set !pass #FALSE
+      if ( !text in #journal && ( ( !namepos = 1 && !namecnt <= 1 ) || !pass ) )
+      {
+        set !temp_jindex !temp_jindex + 1
+        if ADVANCE in !args
+          set !_jindex !temp_jindex
+        set #LPC !temp_lpc
+        namespace pop
+        set !TM_FunctionCalled #TRUE
+        return #TRUE
+      }
+      set !temp_jindex !temp_jindex + 1
+    }
+    set !index !index + 1
+  until !index - !first_arg > !num_args - !first_arg
+  set #LPC !temp_lpc
+  namespace pop
+  set !TM_FunctionCalled #TRUE
+return #FALSE
+; ---------------------------------------------------
+; %1 = x position (world) return x pos (screen)
+; %2 = y position (world) return y pos (screen)
+; %3 = x modifier (modifies x pos screen)
+; %4 = y modifier (modifies y pos screen)
+sub LocateScreenCoords
+  set %x #CHARPOSX - %1
+  set %y #CHARPOSY - %2
+  set %clickx ( #CLIXRES / 2 )
+  set %clicky ( #CLIYRES / 2 )
+  set %absx %x
+  set %absy %y
+
+  if %x < 0
+    set %absx 0 - %x
+  if %y < 0
+    set %absy 0 - %y
+
+  if ( %x > 0 ) && ( %y < 0 ) && ( %absx >= %absy )
+    set %clickx %clickx + ( 44 * %y )
+  if ( %x > 0 ) && ( %y < 0 ) && ( %absx < %absy )
+    set %clickx %clickx - ( 44 * %x )
+
+  if ( %x > 0 ) && ( %y > 0 ) && ( %absx >= %absy )
+    set %clicky %clicky - ( 44 * %y )
+  if ( %x > 0 ) && ( %y > 0 ) && ( %absx < %absy )
+    set %clicky %clicky - ( 44 * %x )
+
+  if ( %x < 0 ) && ( %y > 0 ) && ( %absx >= %absy )
+    set %clickx %clickx + ( 44 * %y )
+  if ( %x < 0 ) && ( %y > 0 ) && ( %absx < %absy )
+    set %clickx %clickx - ( 44 * %x )
+
+  if ( %x < 0 ) && ( %y < 0 ) && ( %absx >= %absy )
+    set %clicky %clicky - ( 44 * %y )
+  if ( %x < 0 ) && ( %y < 0 ) && ( %absx < %absy )
+    set %clicky %clicky - ( 44 * %x )
+
+  set %xx 0
+  set %yy 0
+  if %absy > %absx
+  {
+    set %yy %absy - %absx
+    if %y < 0
+      set %yy 0 - %yy
+  }
+  if %absx > %absy
+  {
+    set %xx %absx - %absy
+    if %x < 0
+      set %xx 0 - %xx
+  }
+
+  if %xx <> 0
+  {
+    set %clickx ( %clickx - ( 22 * %xx ) )
+    set %clicky ( %clicky - ( 22 * %xx ) )
+  }
+  if %yy <> 0
+  {
+    set %clickx ( %clickx + ( 22 * %yy ) )
+    set %clicky ( %clicky - ( 22 * %yy ) )
+  }
+  set %1 %clickx + %3
+  set %2 %clicky + %4
+return
+; ---------------------------------------------------
+;--------- EasyUO Menu Designer Code Begin ---------
+sub showEUOMenu1
+	menu Clear
+	menu Window Title EUOMenu1
+	menu Window Color BtnFace
+	menu Window Size 202 159
+	menu Font Transparent #true
+	menu Font Align Right
+	menu Font Name MS Sans Serif
+	menu Font Size 8
+	menu Font Style
+	menu Font Color WindowText
+	menu Font BGColor Window
+	menu Edit EUOEdit1 28 20 121 EUOEdit1
+	menu Show 421 270
+return
+;--------- EasyUO Menu Designer Code End ---------
+

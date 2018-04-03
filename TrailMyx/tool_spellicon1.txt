@@ -1,0 +1,576 @@
+;=================================================================
+; Script Name: TrailMyx's Spell Icon Manager
+; Author: TrailMyx
+; Version: 1.0
+; Shard OSI / FS: OSI / FS OK
+; Revision Date: 9/29/2007
+; Purpose: A set of subs to manipulate spellbook icons.
+; Globals:
+; Special Thanks:
+;=================================================================
+; Disclaimer:  By running this script, you are accepting the contents of this licence agreement.
+; This script is only authorized to be distributed on www.scriptuo.com.  If you purchase this script,
+; acquire it from another website, it is not considered an authorized copy and should be deleted
+; immediately.
+; You hold the author, TrailMyx, and the distribution site www.scriptuo.com not liable for any loss of
+; items, accounts, monitary or time losses associated with the use of this script.  Furthermore, you promise
+; not to distribute or sell this script to anyone without the express permission of the author, Trailmyx.
+; Violation of the contents of this agreement will result in one of the following: litigation, www.scriptuo.com
+; account termination, discimination of bad karma for your next life, and most definitely causing a black mark
+; placed on your soul.
+;
+; I worked very hard to bring this script to you, so please use it responisibily and
+; respectfully.  If you have any questions, please reach me at trailmyx@yahoo.com.
+; (c) 2007 TrailMyx, All rights reserved.
+;
+;===================================================================
+; 70, 50
+; 240 , 50
+set #LPC 100
+gosub showEUOMenu1
+gosub Setup
+set #MENUBUTTON N/A
+mainloop1:
+
+  gosub CheckSpellCombos
+
+  goto mainloop1
+  
+gosub ResetMageryIcons
+
+;stop
+
+for %i 0 63
+{
+  gosub GrabMagerySpellIcon %i SQUARE
+}
+for %i 0 15
+  gosub GrabOtherSpellIcon %i necro SQUARE
+
+for %i 0 9
+  gosub GrabOtherSpellIcon %i chiv SQUARE
+
+
+
+stop
+;--------------------------------------------------
+sub ResetMageryIcons
+  namespace push
+  namespace local GSI
+  set !iconindexx 0
+  set !iconindexy 0
+  set !yiconpositions 650
+  set !xiconpositions 24
+
+  for !i 0 63
+  {
+    set !clickx !xiconpositions + !iconindexx * 48
+    set !clicky !yiconpositions + !iconindexy * 44
+    click !clickx !clicky r
+
+    set !iconindexx !iconindexx + 1
+    if !iconindexx > 7
+    {
+      set !iconindexy !iconindexy + 1
+      set !iconindexx 0
+    }
+  }
+  set !iconindexx 0
+  set !iconindexy 0
+  namespace pop
+return
+;--------------------------------------------------
+sub GrabMagerySpellIcon
+  namespace push
+  namespace local GSI
+  set !spell %1
+  set !shape %2
+  finditem MPF C_ , #BACKPACKID
+  if #FINDKIND = -1
+    goto GrabMagerySpellIcon_skip1
+  if !iconindexx = N/A
+  {
+    set !iconindexx 0
+    set !iconindexy 0
+    set !yiconpositions 650
+    set !xiconpositions 24
+  }
+
+  gosub OpenAndWaitForGump #FINDID spellbook_gump 406_249 MPF  ; 0 0
+  set !clicky #CONTPOSY + 184
+  set !pagex 70
+  set !tempspell !spell
+  if !spell / 32 >= 1
+  {
+    set !pagex 237
+    set !tempspell !tempspell - 32
+  }
+
+  if ( ( !timeoutindex = N/A ) || ( !timeoutindex / 16 <> !spell / 16 ) )
+  {
+    set !clickx ( #CONTPOSX + !pagex + ( ( !tempspell / 8 ) * 35 ) )
+    set !savepixx #CONTPOSX + 192
+    set !savepixy #CONTPOSY + 35
+    savepix !savepixx !savepixy 1
+    set !oldpix #PIXCOL
+    click !clickx !clicky mc
+    set !wait #SCNT + 3
+    repeat
+      savepix !savepixx !savepixy 1
+    until #PIXCOL <> !oldpix || #SCNT > !wait
+    if #SCNT > !wait
+      set !timeoutindex !spell
+  }
+  
+  if ( ( !spell % 16 ) / 8 ) = 0
+    set !clickx #CONTPOSX + 63
+  else
+    set !clickx #CONTPOSX + 230
+  set !clicky ( #CONTPOSY + ( ( ( !spell % 8 ) * 15 ) + 57 ) )
+  click !clickx !clicky mc
+  
+  set !savepixx #CONTPOSX + 225
+  set !savepixy #CONTPOSY + 63
+  savepix !savepixx !savepixy 1
+  set !oldpix #PIXCOL
+  set !wait #SCNT + 5
+  repeat
+    savepix !savepixx !savepixy 1
+  until #PIXCOL <> !oldpix || #SCNT > !wait
+
+  set !LR !spell % 2
+  set !clickx ( #CONTPOSX + 70 + ( 170 * !LR ) )
+  set !clicky #CONTPOSY + 50
+  click !clickx !clicky dmc g
+  repeat
+  until #CONTNAME = spellicon_gump
+
+  gosub DropShape !shape
+  
+GrabMagerySpellIcon_skip1:
+  namespace pop
+return
+;--------------------------------------------------
+sub GrabOtherSpellIcon
+  namespace push
+  namespace local GSI
+  set !spell %1
+  set !spelltype %2
+  set !shape %3
+  if necro in !spelltype
+  {
+    set !booktype XXM
+    set !numspells 16
+  }
+  if chiv in !spelltype
+  {
+    set !booktype YXM
+    set !numspells 10
+  }
+  if bush in !spelltype
+  {
+    set !booktype QON
+    set !numspells 6
+  }
+  if ninj in !spelltype
+  {
+    set !booktype SPN
+    set !numspells 8
+  }
+  if spellw in !spelltype
+  {
+    set !booktype ECR
+    set !numspells 16
+  }
+  finditem !booktype C_ , #BACKPACKID
+  if #FINDKIND = -1
+    goto GrabOtherSpellIcon_skip1
+  if !iconindexx = N/A
+  {
+    set !iconindexx 0
+    set !iconindexy 0
+    set !yiconpositions 650
+    set !xiconpositions 24
+  }
+
+  gosub OpenAndWaitForGump #FINDID spellbook_gump 406_249 !booktype ; 0 0
+
+  if ( ( !spell % !numspells ) / ( !numspells / 2 ) ) = 0
+    set !clickx #CONTPOSX + 63
+  else
+    set !clickx #CONTPOSX + 230
+  set !clicky ( #CONTPOSY + ( ( ( !spell % ( !numspells / 2 ) ) * 15 ) + 57 ) )
+  click !clickx !clicky mc
+
+  set !savepixx #CONTPOSX + 225
+  set !savepixy #CONTPOSY + 63
+  savepix !savepixx !savepixy 1
+  set !oldpix #PIXCOL
+  set !wait #SCNT + 5
+  repeat
+    savepix !savepixx !savepixy 1
+  until #PIXCOL <> !oldpix || #SCNT > !wait
+
+  set !LR !spell % 2
+  set !clickx ( #CONTPOSX + 70 + ( 170 * !LR ) )
+  set !clicky #CONTPOSY + 50
+  click !clickx !clicky dmc g
+  repeat
+  until #CONTNAME = spellicon_gump
+
+  gosub DropShape !shape
+
+GrabOtherSpellIcon_skip1:
+  namespace pop
+return
+;--------------------------------------------------
+sub DropShape
+  if %1 = SQUARE
+  {
+    set !clickx !xiconpositions + !iconindexx * 48
+    set !clicky !yiconpositions + !iconindexy * 44
+    goto DropShape_skip1
+  }
+  
+; -- Pyramid
+
+  if %1 = SMALL_PYRAMID
+  {
+
+    if !iconindexy % 2 = 0
+      set !clickx !xiconpositions + !iconindexx * 48 ; 48
+    else
+      set !clickx !xiconpositions + 24 + !iconindexx * 48 ; 48
+    set !clicky !yiconpositions - ( !iconindexy * 12 ) + !iconindexy * 44 ; 44
+    goto DropShape_skip1
+  }
+  
+; -- Pyramid
+
+  if %1 = LARGE_PYRAMID
+  {
+
+    if !iconindexy % 2 = 0
+      set !clickx !xiconpositions + !iconindexx * 60 ; 48
+    else
+      set !clickx !xiconpositions + 24 + !iconindexx * 60 ; 48
+    set !clicky !yiconpositions - ( !iconindexy * 12 ) + !iconindexy * 44 ; 44
+    goto DropShape_skip1
+  }
+  
+DropShape_skip1:
+  click !clickx !clicky mc p
+  
+  set !iconindexx !iconindexx + 1
+  if !iconindexx > 7
+  {
+    set !iconindexy !iconindexy + 1
+    set !iconindexx 0
+  }
+return
+
+;--------------------------------------------------
+sub OpenAndWaitForGump
+  namespace push
+  namespace local OWFG
+  set #RESULT #FALSE
+  set !findid %1
+  set !contname %2
+  set !contsize %3
+  set !conttype %4
+  set !locx %5
+  set !locy %6
+
+  set #LOBJECTID !findid
+  event macro 17 0
+  set !wait #SCNT + 3
+  repeat
+  until !contname = #CONTNAME && !contsize = #CONTSIZE && !conttype = #CONTTYPE || #SCNT > !wait
+  if #SCNT > !wait
+    gosub OpenAndWaitForGump_skip1
+  if %0 > 4
+  {
+    contpos !locx !locy
+    set !wait #SCNT + 7
+    repeat
+    until #CONTPOSX = !locx && #CONTPOSY = !locy || #SCNT > !wait
+  }
+  set #RESULT #TRUE
+OpenAndWaitForGump_skip1:
+  wait 5
+  namespace pop
+return #RESULT
+;-------------------------------------------------------------------------------
+; %1 - string to mung
+sub AddSpace
+  namespace push
+  namespace local AS
+  set !tempstring %1
+  AddUnderscore_loop1:
+    str pos !tempstring _
+    if #STRRES <> 0
+    {
+      set !val #STRRES - 1
+      str left !tempstring !val
+      set !left #STRRES
+      set !val !val + 1
+      str del !tempstring 1 !val
+      set !tempstring !left , #SPC , #STRRES
+      goto AddUnderscore_loop1
+    }
+  set #RESULT !tempstring
+  namespace pop
+return #RESULT
+;-------------------------------------------------------------------------------
+sub CheckSpellCombos
+  if EUOButtonCircle in #MENUBUTTON
+  {
+    str del #MENUBUTTON 1 15
+    set %temp_circle #STRRES
+    if %magery_state <> %temp_circle
+    {
+      menu delete EUOComboMagery
+      menu Font BGColor Window
+      menu Combo Create EUOComboMagery 4 36 193
+      if %temp_circle = all
+      {
+        set %start 0
+        set %end 63
+      }
+      else
+      {
+        set %start ( ( %temp_circle - 1 ) * 8 )
+        set %end %start + 7
+      }
+      for %i %start %end
+      {
+        set %spellname %spell . %i
+        gosub AddSpace %spellname
+        menu Combo Add EUOComboMagery #RESULT
+      }
+      menu Combo Select EUOComboMagery 1
+    }
+    set #MENUBUTTON N/A
+  }
+  if #MENUBUTTON in EUOButtonNecro_EUOButtonChiv_EUOButtonSpellweaving_EUOButtonBushido_EUOButtonNinjitsu
+  {
+    if Necro in #MENUBUTTON
+    {
+      set %spellname necro
+      set %spellquant 15
+    }
+    if Chiv in #MENUBUTTON
+    {
+      set %spellname Chiv
+      set %spellquant 9
+    }
+    if Spellw in #MENUBUTTON
+    {
+      set %spellname Spellw
+      set %spellquant 15
+    }
+    if Bush in #MENUBUTTON
+    {
+      set %spellname Bush
+      set %spellquant 5
+    }
+    if Ninj in #MENUBUTTON
+    {
+      set %spellname Ninj
+      set %spellquant 7
+    }
+    if %spellname <> %otherstate
+    {
+      set %otherstate %spellname
+      menu delete EUOComboOtherSpell
+      menu Font BGColor Window
+      menu Combo Create EUOComboOtherSpell 4 124 193
+      for %i 0 %spellquant
+      {
+        set %name %spellname , %i
+        gosub AddSpace % . %name
+        menu Combo Add EUOComboOtherSpell #RESULT
+      }
+      menu Combo Select EUOComboOtherSpell 1
+    }
+    set #MENUBUTTON N/A
+  }
+
+return
+;-------------------------------------------------------------------------------
+sub Setup
+  if %shard_kind = OSI
+  {
+    set %SPELL0 Clumsy
+    set %SPELL1 Create_Food
+    set %SPELL2 Feeblemind
+    set %SPELL3 Heal
+    set %SPELL4 Magic_Arrow
+    set %SPELL5 Night_Sight
+    set %SPELL6 Reactive_Armor
+    set %SPELL7 Weaken
+  }
+  else
+  {
+    set %SPELL0 Reactive_Armor
+    set %SPELL1 Clumsy
+    set %SPELL2 Create_Food
+    set %SPELL3 Feeblemind
+    set %SPELL4 Heal
+    set %SPELL5 Magic_Arrow
+    set %SPELL6 Night_Sight
+    set %SPELL7 Weaken
+  }
+  set %SPELL8 Agility
+  set %SPELL9 Cunning
+  set %SPELL10 Cure
+  set %SPELL11 Harm
+  set %SPELL12 Magic_Trap
+  set %SPELL13 Magic_Untrap
+  set %SPELL14 Protection
+  set %SPELL15 Strength
+  set %SPELL16 Bless
+  set %SPELL17 Fireball
+  set %SPELL18 Magic_Lock
+  set %SPELL19 Poison
+  set %SPELL20 Telekinesis
+  set %SPELL21 Teleport
+  set %SPELL22 Unlock
+  set %SPELL23 Wall_of_Stone
+  set %SPELL24 Arch_Cure
+  set %SPELL25 Arch_Protection
+  set %SPELL26 Curse
+  set %SPELL27 Fire_Field
+  set %SPELL28 Greater_Heal
+  set %SPELL29 Lightning
+  set %SPELL30 Mana_Drain
+  set %SPELL31 Recall
+  set %SPELL32 Blade_Spirits
+  set %SPELL33 Dispel_Field
+  set %SPELL34 Incognito
+  set %SPELL35 Magic_Reflection
+  set %SPELL36 Mind_Blast
+  set %SPELL37 Paralyze
+  set %SPELL38 Poison_Field
+  set %SPELL39 Summon_Creature
+  set %SPELL40 Dispel
+  set %SPELL41 Energy_Bolt
+  set %SPELL42 Explosion
+  set %SPELL43 Invisibility
+  set %SPELL44 Mark
+  set %SPELL45 Mass_Curse
+  set %SPELL46 Paralyze_Field
+  set %SPELL47 Reveal
+  set %SPELL48 Chain_Lightning
+  set %SPELL49 Energy_Field
+  set %SPELL50 Flame_Strike
+  set %SPELL51 Gate_Travel
+  set %SPELL52 Mana_Vampire
+  set %SPELL53 Mass_Dispel
+  set %SPELL54 Meteor_Swarm
+  set %SPELL55 Polymorph
+  set %SPELL56 Earthquake
+  set %SPELL57 Energy_Vortex
+  set %SPELL58 Resurrection
+  set %SPELL59 Summon_Air_Elemental
+  set %SPELL60 Summon_Daemon_
+  set %SPELL61 Summon_Earth_Elemental
+  set %SPELL62 Summon_Fire_Elemental
+  set %SPELL63 Summon_Water_Elemental
+  set %NECRO0 Animate_Dead
+  set %NECRO1 Blood_Oath
+  set %NECRO2 Corpse_Skin
+  set %NECRO3 Curse_Weapon
+  set %NECRO4 Evil_Omen
+  set %NECRO5 Horrific_Beast
+  set %NECRO6 Lich_Form
+  set %NECRO7 Mind_Rot
+  set %NECRO8 Pain_Spike
+  set %NECRO9 Poison_Strike
+  set %NECRO10 Strangle
+  set %NECRO11 Summon_Familiar
+  set %NECRO12 Vampiric_Embrace
+  set %NECRO13 Vengeful_Spirit
+  set %NECRO14 Wither
+  set %NECRO15 Wraith_Form
+  set %NECRO16 Exorcism
+return
+
+;--------- EasyUO Menu Designer Code Begin ---------
+sub showEUOMenu1
+	menu Clear
+	menu Window Title TrailMyx's Desktop Manager
+	menu Window Color BtnFace
+	menu Window Size 534 297
+	menu Font Transparent #true
+	menu Font Align Right
+	menu Font Name MS Sans Serif
+	menu Font Size 8
+	menu Font Style
+	menu Font Color WindowText
+	menu Font Transparent #false
+	menu Font Align Left
+	menu Text EUOLabel1 288 4 Group: none
+	menu Text EUOLabel2 392 276 XStart: 0
+	menu Text EUOLabel3 444 276 YStart: 650
+	menu Text EUOLabel4 8 156 New Group:
+	menu Text EUOLabel5 8 224 Save Filename:
+	menu Text EUOLabel6 356 248 Style:
+	menu Text EUOLabel7 272 248 Width:
+	menu Button EUOButtonCircle1 4 8 23 21 1
+	menu Button EUOButtonCircle2 32 8 23 21 2
+	menu Button EUOButtonCircle3 60 8 23 21 3
+	menu Button EUOButtonCircle4 88 8 23 21 4
+	menu Button EUOButtonCircle5 116 8 23 21 5
+	menu Button EUOButtonCircle6 144 8 23 21 6
+	menu Button EUOButtonCircle7 172 8 23 21 7
+	menu Button EUOButtonCircle8 200 8 23 21 8
+	menu Button EUOButtonCircleAll 228 8 23 21 All
+	menu Font BGColor Window
+	menu Combo Create EUOComboMagery 4 36 193
+	menu Font Name Arial
+	menu Font Size 7
+	menu Font BGColor BtnFace
+	menu Button EUOButtonNecro 4 72 67 21 Necromancer
+	menu Button EUOButtonChiv 72 72 67 21 Chivalry
+	menu Button EUOButtonSpellweaving 140 72 67 21 Spellweaving
+	menu Button EUOButtonBushido 4 96 67 21 Bushido
+	menu Button EUOButtonNinjitsu 72 96 67 21 Ninjitsu
+	menu Font Name MS Sans Serif
+	menu Font Size 8
+	menu Font BGColor Window
+	menu Combo Create EUOComboOtherSpell 4 124 193
+	menu Font Name MS Sans Serif
+	menu Font Size 8
+	menu Font BGColor BtnFace
+	menu Button EUOButtonMageryAdd 204 36 31 21 Add
+	menu Button EUOButtonMageryAll 240 36 31 21 All
+	menu Button EUOButtonOtherAdd 200 124 31 21 Add
+	menu Button EUOButtonOtherAll 236 124 31 21 All
+	menu Font BGColor Window
+	menu Edit EUOEditNewGroup 4 172 193 EUOEditNewGroup
+	menu Combo Create EUOComboGroups 4 196 193
+	menu Font Name Arial
+	menu Font Size 7
+	menu Font BGColor BtnFace
+	menu Button EUOButtonGroupAdd 204 172 31 21 Add
+	menu Button EUOButtonGroupDelete 236 172 31 21 Del
+	menu Font Name MS Sans Serif
+	menu Font Size 8
+	menu Font BGColor Window
+	menu List Create EUOListGroupInfo 284 20 241 217
+	menu Font Name MS Sans Serif
+	menu Font Size 8
+	menu Edit EUOEditFilename 4 240 121 c:\tmdesktopsetup.txt
+	menu Font BGColor BtnFace
+	menu Button EUOButton7 84 268 75 25 Save Setup
+	menu Button EUOButton8 4 268 75 25 Load Setup
+	menu Font BGColor Window
+	menu Combo Create EUOComboStyle 384 244 145
+	menu Edit EUOEditWidth 308 244 41
+	menu Font BGColor BtnFace
+	menu Button EUOButtonPosition 304 272 59 21 Position
+	menu Show 421 270
+return
+;--------- EasyUO Menu Designer Code End ---------
+

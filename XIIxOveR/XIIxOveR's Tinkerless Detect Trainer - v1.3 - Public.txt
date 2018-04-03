@@ -1,0 +1,145 @@
+;===================================================;
+; Script Name: XIIxOver's Tinkerless Detect Trainer ;
+; Author: XIIxOveR                                  ;
+; Version: 1.3 Public                               ;
+; Shard OSI/FS: OSI                                 ;
+; Revision Date: 22-Feb-2010                        ;
+; Purpose: Train Detect Hidden Skill                ;
+;===========================================================================
+; Thanks to TM and C2 for Gump, Wait, and Decimal Convert subs and great
+; tutorials!
+;===========================================================================
+; Stand in a location with spawning locked trunks and/or boxes (Vesper Bank,
+; etc) or put locked trunks and/or boxes in your pack. Press play.
+;
+; Notes:
+;    *If you are an Elf character and your Hiding skill is less than 20
+;     this script will not try to hide you.
+;    *Most importantly, training will go more quickly when you attempt to
+;     gain on containers of increasing difficulty. For example, if training
+;     at Vesper bank, start in the north-west room until about 50-60 then
+;     move to the south-east room where the trunks are a little more
+;     difficult. At about 87 put a trapped level 6 Paragon trunk (eg Miasma)
+;     in your pack.
+;
+;                          USE AT YOUR OWN RISK!
+;===========================================================================
+set %cratetypes TMF_UMF_VMF_WMF_HIF_IIF_JIF_KIF_IKF_JKF_KKF_ZTD_BUD_NWH
+
+gosub Setup
+
+;Start Main Loop
+Repeat
+   if %tohide = yes && H notin #CHARSTATUS
+      {
+      Repeat
+         gosub UseSkill Hidi
+         Wait 11s
+      Until H in #CHARSTATUS
+      }
+      
+   chooseskill Dete
+   set %currentskill #skill
+   if %currentskill = 1000
+      {
+      Display Congratulations! You have reached GM Detect!
+      Halt
+      }
+   else
+      {
+      set %gainedskill %currentskill - %startskill
+      gosub Convert2Decimal %currentskill
+      Menu set M_Skill_Current %2
+      gosub Convert2Decimal %gainedskill
+      Menu set M_Skill_Gained %2
+      }
+   
+   gosub Useskill Dete
+Until #FALSE
+;End Main Loop
+
+;################################################
+;                 SUB SETUP
+;################################################
+sub Setup
+   chooseskill Dete
+   set %startskill #skill
+
+   chooseskill Hidi
+   finditem #charid
+   if #skill >= 200 || #findtype notin AV_XU
+      {
+      display yesno Hide when training?
+      if #dispRes = yes
+         set %tohide yes
+      if #dispRes = no
+         set %tohide no
+      }
+   gosub Display_M_TrackSkill
+return
+
+;################################################
+;             SUB UseSkill
+;################################################
+sub UseSkill
+   if %1 = Hidi
+      {
+      event macro 13 21
+      return
+      }
+   if %1 = Dete
+      {
+      event macro 13 14
+      target
+      finditem %cratetypes C_ , #backpackid
+      if #findkind = -1
+         {
+         finditem %cratetypes G_5
+         wait 10
+         if #findkind = -1
+            {
+            Display No boxes found. Go somewhere with locked boxes or put one in your pack! Script Halting!
+            halt
+            }
+         }
+      set #LTARGETID #findid
+      set #ltargetkind 1
+      event macro 22 0
+      wait 10s
+      return
+      }
+Return
+
+;################################################
+;           SUB CONVERT2DECIMAL
+;################################################
+sub Convert2Decimal
+  set %intpart %1 / 10
+  set %decpart %1 % 10
+  set %2 %intpart , #dot , %decpart
+return
+
+;################################################
+;           SUB DISPLAY_M_TRACKSKILL
+;################################################
+sub Display_M_Trackskill
+	menu Clear
+	menu Window Title Skill Progress
+	menu Window Color Black
+	menu Window Size 175 27
+	menu Font Transparent #true
+	menu Font Align Right
+	menu Font Name MS Sans Serif
+	menu Font Size 8
+	menu Font Style
+	menu Font Color Silver
+	menu Font Transparent #false
+	menu Font Align Left
+	menu Font BGColor Black
+	menu Text EUOLabel1 102 8 Gained:
+	menu Text EUOLabel2 1 8 Current Skill:
+	menu Font Color White
+	menu Edit M_Skill_Gained 140 4 33
+	menu Edit M_Skill_Current 62 4 33
+	menu Show 421 270
+return

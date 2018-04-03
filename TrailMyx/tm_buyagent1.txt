@@ -1,0 +1,288 @@
+;=================================================================
+; Script Name: TrailMyx's Buy Agent Subs
+; Author: TrailMyx
+; Version: 1.0
+; Shard OSI / FS: OSI / FS OK
+; Revision Date: 9/29/2007
+; Purpose: Automates the process of buying items from NPCs
+;
+;  TM_BuyAgent_ID = If you know the #FINETYPE of the items you want to purchase
+;  TM_BuyAgent_Name = If you want to purchase an item by name
+;  #RETURNS #TRUE (-1) if error occurs
+;           number of items purchased (no error)
+;
+; http://www.scriptuo.com
+;
+; Example:
+; set %npc_id XXYYZZ1
+; gosub TM_BuyAgent_ID %npc_id OIK 5 ; 5 wooden shields
+; gosub TM_BuyAgent_ID %npc_id BSF 10 ; 10 battleaxe
+; gosub TM_BuyAgent_Name %npc_id battle_axe 2 ; 10 battleaxe
+; gosub TM_BuyAgent_Name %npc_id mandrake_root 100 ; 100  mandrake root
+;=================================================================
+
+
+;-------------------------------------------------------------------------------
+; %1 = #FINDID of NPC
+; %2 = #FINDTYPE of item to buy
+; %3 = amount to purchase
+sub TM_BuyAgent_ID
+  namespace push
+  namespace local ba
+  set %CONTEXT_Buy 200250
+  set !NPC %1
+  set !item %2
+  set !amount %3
+  gosub TM_HandleContextMenu !NPC %CONTEXT_Buy #TRUE
+  gosub GumpWait bill_gump bill_gump
+  if #RESULT = #FALSE
+  {
+    getshopinfo
+    set !clickx #CONTPOSX + 73
+    set !clicky #CONTPOSY - 15
+    for !i 1 #SHOPCNT
+    {
+      if #SHOPITEMTYPE <> !item
+      {
+        set !temp #SHOPCURPOS
+        click !clickx !clicky dmc
+        repeat
+          getshopinfo
+        until #SHOPCURPOS <> !temp
+      }
+      else
+      {
+        wait 5
+        set !clickx #CONTPOSX - 44
+        set !clicky #CONTPOSY - 150
+        click !clickx !clicky d dmc
+        setshopitem #shopItemID !amount
+        set !clickx #CONTPOSX + 44
+        set !clicky #CONTPOSY + 207
+        click !clickx !clicky dmc
+        set #RESULT !amount
+        repeat
+        until #CONTNAME <> bill_gump
+        break
+      }
+    }
+  }
+  namespace pop
+return #RESULT
+;-------------------------------------------------------------------------------
+; %1 = #FINDID of NPC
+; %2 = Name of item to buy
+; %3 = amount to purchase
+sub TM_BuyAgent_Name
+  namespace push
+  namespace local ba
+  set %CONTEXT_Buy 200250
+  set !NPC %1
+  set !item_name %2
+  set !amount %3
+  if _ in !item_name
+  {
+    gosub AddSpace %2
+    set !item_name #RESULT
+  }
+  gosub TM_HandleContextMenu !NPC %CONTEXT_Buy #TRUE
+  gosub GumpWait bill_gump bill_gump
+  if #RESULT = #FALSE
+  {
+    getshopinfo
+    set !clickx #CONTPOSX + 73
+    set !clicky #CONTPOSY - 15
+    for !i 1 #SHOPCNT
+    {
+      event property #SHOPITEMID
+      if !item_name notin #PROPERTY
+      {
+        set !temp #SHOPCURPOS
+        click !clickx !clicky dmc
+        repeat
+          getshopinfo
+        until #SHOPCURPOS <> !temp
+      }
+      else
+      {
+        wait 5
+        set !clickx #CONTPOSX - 44
+        set !clicky #CONTPOSY - 150
+        click !clickx !clicky d dmc
+        setshopitem #shopItemID !amount
+        set !clickx #CONTPOSX + 44
+        set !clicky #CONTPOSY + 207
+        click !clickx !clicky dmc
+        set #RESULT !amount
+        repeat
+        until #CONTNAME <> bill_gump
+        break
+      }
+    }
+  }
+  namespace pop
+return #RESULT
+;-------------------------------------------------------------------------------
+; %1 - string to mung
+sub AddSpace
+  namespace push
+  namespace local AS
+  set !tempstring %1
+AddSpace_loop1:
+  str pos !tempstring _
+  if #STRRES <> 0
+  {
+    set !val #STRRES - 1
+    str left !tempstring !val
+    set !left #STRRES
+    set !val !val + 1
+    str del !tempstring 1 !val
+    set !tempstring !left , #SPC , #STRRES
+    goto AddSpace_loop1
+  }
+  set #RESULT !tempstring
+  namespace pop
+return #RESULT
+;-------------------------------------------------------------------------------
+; %1 = HandleContextMenu
+; %2 = #FINDID to manipulate
+; %3 = menu selection
+; returns #TRUE if entry not found, otherwise #FALSE for no error
+; stores computed values in !test1, !test2, !test3, etc for each menu selection.
+sub TM_HandleContextMenu
+  namespace push
+  namespace local HCM
+  set !findid %1
+  set !menu_selection %2
+  set !clickit %3
+  set !x_offset 12
+  set !y_offset 12
+  set !select_height 18
+  set !y_gump_excess 24
+  set !temp_LPC #LPC
+  set #LPC 1000
+
+  if !menu . !menu_selection <> N/A
+  {
+    set !clickxposition1 !clickxposition1 . !menu_selection
+    set !clickyposition1 !clickyposition1 . !menu_selection
+    HandleContextMenu_loop2:
+      exevent popup !findid
+      gosub GumpWait NULL normal_gump normal_gump
+      if #CONTNAME <> normal_gump
+      {
+        click 0 0 mc n
+        wait 5
+        goto HandleContextMenu_loop2
+      }
+    click !clickxposition1 !clickyposition1 f
+    namespace pop
+    return #FALSE ; no error, selection found
+  }
+
+  HandleContextMenu_loop1:
+    exevent popup !findid
+    gosub GumpWait NULL normal_gump normal_gump
+    if #CONTNAME <> normal_gump
+    {
+      click 0 0 mc n
+      wait 5
+      goto HandleContextMenu_loop1
+    }
+  str pos #CONTSIZE _
+  str del #CONTSIZE 1 #STRRES
+  set !sampled_CONTPOSX #CONTPOSX
+  set !sampled_CONTPOSY #CONTPOSY
+  set !gump_y #STRRES
+  set !number_of_selections ( ( !gump_y - !y_gump_excess ) / !select_height )
+  for !line_number 1 !number_of_selections
+  {
+    set !clickxposition1 !sampled_CONTPOSX + !x_offset
+    set !clickyposition1 !sampled_CONTPOSY + !y_offset + ( !select_height * ( !line_number - 1 ) )
+    set !clickxposition2 !clickxposition1 + 150
+    set !clickyposition2 !clickyposition1 + !select_height - 1
+    gosub TM_NewSampleArea NULL !clickxposition1 !clickyposition1 !clickxposition2 !clickyposition2 16777215
+    set !test . !line_number #RESULT  ; stores values in !test1, !test2, .. !test . n.  Put in debug mode to gather these sampled values
+    if #RESULT = !menu_selection
+    {
+      set !menu . !menu_selection !line_number
+      if !clickit = #TRUE
+      {
+	      set !clickxposition1 . !menu_selection !clickxposition1
+	      set !clickyposition1 . !menu_selection !clickyposition1
+	      click !clickxposition1 !clickyposition1 f
+      }
+      else
+      {
+        set !clickxposition1 !clickxposition1 + 5
+        set !clickyposition1 !clickyposition1 + 5
+        click !clickxposition1 !clickyposition1 r ; close the menu
+        wait 10
+      }
+      set #LPC !temp_LPC
+      namespace pop
+      return #FALSE ; no error, selection found
+    }
+  }
+  set #LPC !temp_LPC
+  namespace pop
+return #TRUE
+;-------------------------------------------------------------------------------
+; %1 = NewSampleArea
+; %2 = x1coord
+; %3 = y1coord
+; %4 = x2coord
+; %5 = y2coord
+; %6 = color
+sub TM_NewSampleArea
+  namespace push
+  namespace local NSA2
+  set !temp_LPC #LPC
+  set #LPC 10000
+  set !stamp 0
+  set !x %2
+  set !blank_cnt 0
+  while !x <= %4
+  {
+    set !y %3
+    while !y <= %5
+    {
+      savepix !x !y 1
+      if #PIXCOL = %6
+      {
+        set !stamp ( !stamp + ( !x - %2 + 1 ) * 2048 + ( !y - %3 + 1 ) * 128 )
+        set !blank_cnt 0
+      }
+      else
+      {
+        set !stamp ( !stamp + ( !x - %2 ) * ( !y - %3 ) )
+      }
+      set !y !y + 2
+    }
+    set !blank_cnt !blank_cnt + 1
+    if !blank_cnt >= 10
+      break
+    if %6 = 8701514
+      set !x !x + 2 ; changing this will impact present sampled values!!
+    else
+      set !x !x + 5
+  }
+  set #LPC !temp_LPC
+  set #RESULT !stamp
+  namespace pop
+return #RESULT
+;-------------------------------------------------------------------------------
+; %1 = GumpWait
+; %2 = Gumpname 1
+; %3 = Gumpname 2
+sub GumpWait
+  wait 10
+  set %timedelay #SCNT
+  GumpWait_loop1:
+    if #CONTNAME = %2 || #CONTNAME = %3
+      return #FALSE
+    if #SCNT > %timedelay + 7
+      return #TRUE
+    goto GumpWait_loop1
+return
+

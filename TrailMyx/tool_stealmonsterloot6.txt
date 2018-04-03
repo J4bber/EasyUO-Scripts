@@ -1,0 +1,402 @@
+;=================================================================
+; Script Name: TrailMyx's Special Item Stealer
+; Author: TrailMyx
+; Version: 0.5
+; Shard OSI / FS: OSI / FS OK
+; Revision Date: 9/29/2007
+; Purpose: Grabs items specifically from dark wisps using the pen trick to speedup
+;          looting and flamestrike (magery) to kill the creature after the successful steal.
+;
+; Requirements:
+;               Inscription Pen
+;               Magery for Flamestrike and LRC suit
+;               GM-120.0 Stealing
+;               dark wisp area through the Spirituality portal
+;               lots of free space in your backpack.
+;
+; Thanks to Xclio for the original idea!
+; http://www.scriptuo.com
+;=================================================================
+; seed of life NWI
+; balm of strength LPF
+; gem of salvation VWL
+; balm of protection OTK
+; life shield lotion GPF
+; balm of wisdom RCJ
+; stone skin lotion FPF
+; balm of swiftness CDJ
+; mana draught HZF
+; NWI_LPF_VWL_OTK_GPF_RCJ_FPF_CDJ_HZF
+set %creature_types XI_
+set #LPC 100
+event macro 8 7
+wait 20
+gosub showEUOMenu1
+finditem * C_ , #BACKPACKID
+for #FINDINDEX 1 #FINDCNT
+  ignoreitem #FINDID
+
+gosub TM_AdvJournalSync STEAL 100
+gosub TM_AdvJournalSync SPELLCAST 100
+
+set %home_x #CHARPOSX
+set %home_y #CHARPOSY
+set #MENUBUTTON N/A
+set %timer #SCNT + 5
+set %attempts 0
+
+repeat
+  gosub LocateCreature %creature_types
+  if #RESULT <> #FALSE
+  {
+    gosub PathFindSteal #RESULT
+    finditem * C_ , #BACKPACKID
+    if #FINDKIND <> -1
+    {
+      event property #FINDID
+      str pos #PROPERTY $ 1
+      set #STRRES #STRRES - 1
+      str mid #PROPERTY 1 #STRRES
+      menu list add EUOListBox1 #STRRES , #SPC , #FINDTYPE
+      ignoreitem #FINDID
+    }
+  }
+  
+  if #MENUBUTTON = EUOButtonSetHome
+  {
+    set #MENUBUTTON N/A
+    set %home_x #CHARPOSX
+    set %home_y #CHARPOSY
+  }
+  
+  if #MENUBUTTON = EUOButtonGoHome
+  {
+    set #MENUBUTTON N/A
+    move %home_x %home_y 
+  }
+  
+  if #SCNT > %timer
+  {
+    set %tempx abs ( #CHARPOSX - %home_x )
+    set %tempy abs ( #CHARPOSY - %home_y )
+    menu get EUOEditRadius
+    if %tempx > #MENURES || %tempy > #MENURES
+      set #MENUBUTTON EUOButtonGoHome
+    menu delete EUOLabelDistance
+    set %textx #CHARPOSX - %home_x
+    set %texty #CHARPOSY - %home_y
+	  menu Text EUOLabelDistance 212 8 Distance: , #SPC , %textx , #SPC , %texty
+	  set %timer #SCNT + 5
+  }
+until #FALSE
+;-------------------------------------------------------------------------------
+sub PathFindSteal
+  namespace push
+  namespace local PF
+  set !creature %1
+  repeat
+    finditem !creature G
+    if #FINDKIND = -1
+    {
+      namespace pop
+      return #TRUE
+    }
+    if #FINDDIST > 1
+    {
+      event pathfind #FINDX #FINDY #FINDZ
+      wait 20
+      continue
+    }
+    else
+    {
+      gosub DoSkill 33 #FINDID
+      gosub TM_AdvJournalScan STEAL VALID you_successfully that_creature_has_alread this_item_is_too
+      menu get EUOCheckMaxAttempts
+      set !killafter #MENURES
+      menu get EUOEditMaxAttempts
+      if ( #RESULT = #TRUE || ( !killafter = #TRUE && %attempts > #MENURES ) )
+      {
+        gosub TM_AdvJournalSync STEAL
+        gosub KillIt #FINDID
+        ignoreitem #FINDID
+        set %attempts 0
+        wait 10s
+        namespace pop
+        return
+      }
+      gosub TM_AdvJournalScan STEAL VALID you_reach_into
+      if #RESULT = #TRUE
+      {
+        gosub TM_AdvJournalSync STEAL
+        set %attempts %attempts + 1
+      }
+    }
+  until #FINDDIST <= 1
+
+  namespace pop
+return #FALSE
+;-------------------------------------------------------------------------------
+sub KillIt
+  namespace push
+  namespace locak KI
+  set !target %1
+  repeat
+    gosub TM_NewCastSpell 50 !target  -1 10 10 ; flamestrike until successful
+    finditem !target G
+  until #FINDKIND = -1
+  wait 20
+return
+;-------------------------------------------------------------------------------
+sub LocateCreature
+  namespace push
+  namespace local LC
+  set !creatures %1
+
+  for %i 1 18
+  {
+    finditem !creatures G_ , %i
+    if #FINDKIND <> -1 && #FINDCOL <> 1281
+    {
+      namespace pop
+      return #FINDID
+    }
+  }
+  set #MENUBUTTON EUOButtonGoHome
+  namespace pop
+return #FALSE
+;-----------------------------------------------
+sub DoSkill
+  set !skill %1
+  set !target %2
+  event macro 13 !skill
+  target 5s
+  set #LTARGETID !target
+  set #LTARGETKIND 1
+  event macro 22 0
+return
+;-------------------------------------------------------------------------------
+; %1 - Journal Name
+; %2 - #LPC setting (optional)
+; Brings !_jindex up to the most recent #journal entry
+sub TM_AdvJournalSync
+  namespace push
+  namespace local TM_AdvJS_ , %1
+  set !_jindex #jindex + 1
+  if %0 > 1
+    set !lpc_set %2
+  namespace pop
+  set !TM_FunctionCalled #TRUE
+return
+;-------------------------------------------------------------------------------
+; %1 - Journal Name
+; %2 - NONE, ADVANCE , ( _VALID ) - advances jindex pointer, anything else
+; %3, %4, %5, etc strings to match
+; returns #TRUE for match, #FALSE for no match
+;  Will not advance !_jindex pointer to allow for scanning journal history for more than one search.
+;  Also searches for : , #SPC in journal entry to be sure someone isn't spamming the text
+;  About %2 arguments:
+;    NONE: defaults to basic journal scan (no SPAM checking, no #jindex pointer copy advancing)
+;    ADVANCE: no spam checking, advances #jindex copy
+;    VALID: invokes SPAM filtering, no advance of #jindex copy
+;    VALID_ADVANCE, VALIDADVANCE, ADVANCE_VALID, etc.: invokes SPAM filtering, advances of #jindex copy
+sub TM_AdvJournalScan
+  namespace push
+  namespace local TM_AdvJS_ , %1
+  set !args %2
+  set !temp_lpc #LPC
+  if !lpc_set = N/A
+    set #LPC 1000
+  else
+    set #LPC !lpc_set
+  set !num_args %0
+  set !first_arg 3
+  if !_jindex = N/A
+    set !_jindex #jindex
+  if !charname = N/A
+  {
+    set !charname #CHARNAME
+AdvJournalScan_loop1:
+    str pos !charname #SPC
+    if #STRRES <> 0
+    {
+      set !val #STRRES - 1
+      str left !charname !val
+      set !left #STRRES
+      set !val !val + 1
+      str del !charname 1 !val
+      set !charname !left , _ , #STRRES
+      goto AdvJournalScan_loop1
+    }
+  }
+  set !index !first_arg
+  repeat
+    set !temp_jindex !_jindex
+    set !text % . !index
+    while !temp_jindex <= #jindex
+    {
+      scanjournal !temp_jindex
+      str pos #JOURNAL !charname 1
+      set !namepos #STRRES
+      str count #JOURNAL !charname
+      set !namecnt #STRRES
+      str pos #JOURNAL :_ 1
+      set !smcpos #STRRES
+      str pos #JOURNAL !text 1
+      set !textpos #STRRES
+      if !textpos < !smcpos && !smcpos <> 0 || !smcpos = 1 || :_ notin #JOURNAL || VALID notin !args
+        set !pass #TRUE
+      else
+        set !pass #FALSE
+      if ( !text in #journal && ( ( !namepos = 1 && !namecnt <= 1 ) || !pass ) )
+      {
+        set !temp_jindex !temp_jindex + 1
+        if ADVANCE in !args
+          set !_jindex !temp_jindex
+        set #LPC !temp_lpc
+        namespace pop
+        set !TM_FunctionCalled #TRUE
+        return #TRUE
+      }
+      set !temp_jindex !temp_jindex + 1
+    }
+    set !index !index + 1
+  until !index - !first_arg > !num_args - !first_arg
+  set #LPC !temp_lpc
+  set %10 #JINDEX - !_jindex
+  set %10 %1 , _ , %10
+  namespace pop
+  set !TM_FunctionCalled #TRUE
+return #FALSE
+;-------------------------------------------------------------------------------
+sub TM_NewCastSpell
+  namespace push
+  namespace local NCS
+  set !lpc #LPC
+  set #LPC 100
+  set !whichspell %1
+  set !whichtarget %2
+  set !castretrymax %3
+  set !waitdelay %4
+  set !recovery_delay %5
+  set !castretry 0
+  set !temp_ltargetid #LTARGETID
+  set !temp_ltargetkind #LTARGETKIND
+
+  repeat
+  until #LLIFTEDKIND = 0 && #TARGCURS = 0 && A notin #CHARSTATUS
+
+NewCastSpell_loop1:
+  if !castretrymax < 0
+    goto NewCastSpell_cont1
+  if !castretry > !castretrymax
+    goto NewCastSpell_end1
+NewCastSpell_cont1:
+  gosub TM_AdvJournalSync SPELLCAST
+  set #LTARGETKIND 1
+  set #LTARGETID !whichtarget
+  set !tempmana #MANA
+  event macro 15 !whichspell ; cast the spell
+  wait !waitdelay
+  repeat
+  until A notin #CHARSTATUS
+  set !targettimeout #SCNT + 7
+NewCastSpell_wait1:
+  gosub TM_AdvJournalScan SPELLCAST VALID spell_fizzles you_have_not_yet mana your_spirit
+  if #RESULT = #TRUE || #SCNT > !targettimeout
+  {
+    set !casttimeout #SCNT2 + !recovery_delay
+    repeat
+    until #SCNT2 > !casttimeout     ; finish up cast delay
+    set !castretry !castretry + 1
+    goto NewCastSpell_loop1
+  }
+  gosub TM_AdvJournalScan SPELLCAST VALID more_reagents
+  if #RESULT = #TRUE
+    goto NewCastSpell_end1 ; fail
+
+  if !whichtarget = NONE
+    goto NewCastSpell_skip1
+  if #TARGCURS = 1
+    goto NewCastSpell_targ1
+  goto NewCastSpell_wait1 ; wait for target cursor
+
+NewCastSpell_targ1:
+  if !whichtarget = SELF
+    event macro 23
+  else
+    event macro 22
+
+NewCastSpell_skip1:
+  wait 5
+  set !casttimeout #SCNT2 + !recovery_delay
+NewCastSpell_skip2:
+  if !whichspell >= 0 && !whichspell <= 63 ; Magery
+  {
+    gosub TM_AdvJournalScan SPELLCAST VALID spell_fizzles there_is_already mana your_spirit more_reagents
+  }
+  else
+  {
+    set !cont #FALSE  ; Chivalry, Necromancy, etc
+    finditem !whichtarget *
+    if !whichtarget in SELF_NONE || #FINDKIND <> -1
+      set !cont #TRUE
+
+    if #MANA >= !tempmana && !cont = #TRUE ; check if target is still there
+      set #RESULT #TRUE
+    else
+      set #RESULT #FALSE
+  }
+  repeat
+  until #SCNT2 > !casttimeout     ; finish up cast delay
+  if #RESULT = #TRUE
+  {
+    if !castretrymax > -1
+    {
+      set !castretry !castretry + 1 ; %castretrymax of -1 will cast until successful
+      if !castretry > !castretrymax
+        goto NewCastSpell_end1
+    }
+    goto NewCastSpell_loop1
+  }
+  if #SCNT2 <= !casttimeout     ; finish up cast delay
+    goto NewCastSpell_skip2
+NewCastSpell_end1:
+  set #LTARGETID !temp_ltargetid
+  set #LTARGETKIND !temp_ltargetkind
+  set #LPC !lpc
+  namespace pop
+return
+;--------- EasyUO Menu Designer Code Begin ---------
+sub showEUOMenu1
+	menu Clear
+	menu Window Title TrailMyx's Stealing Helper
+	menu Window Color BtnFace
+	menu Window Size 364 232
+	menu Font Transparent #true
+	menu Font Align Right
+	menu Font Name MS Sans Serif
+	menu Font Size 8
+	menu Font Style
+	menu Font Color WindowText
+	menu Font Transparent #false
+	menu Font Align Left
+	menu Text EUOLabelDistance 212 8 Distance: 0 0
+	menu Text EUOLabel1 212 28 Maximum Radius:
+	menu Text EUOLabel2 212 52 Taming attempts:
+	menu Font BGColor Window
+	menu List Create EUOListBox1 4 4 205 225
+	menu Font BGColor BtnFace
+	menu Button EUOButtonSetHome 248 172 75 25 Set Home
+	menu Font BGColor Window
+	menu Edit EUOEditRadius 296 24 37 30
+	menu Font BGColor BtnFace
+	menu Button EUOButtonGoHome 248 144 75 25 Go Home
+	menu Font BGColor Window
+	menu Edit EUOEditMaxAttempts 296 48 37 8
+	menu Font BGColor BtnFace
+	menu Check EUOCheckMaxAttempts 212 72 220 17 #false Kill after max attempts
+	menu Show 421 270
+return
+;--------- EasyUO Menu Designer Code End ---------
+
+

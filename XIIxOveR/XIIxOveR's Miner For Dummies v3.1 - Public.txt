@@ -1,0 +1,1926 @@
+;===========================================
+; Script Name: XIIxOveR's Miner For Dummies
+; Author: XIIxOveR
+; Version: 3.1
+; Shard OSI/FS: OSI
+; Revision Date: October 30, 2011
+; Purpose: Resource collection
+;===========================================================================
+; Thanks to OMGBurgers for the Mining routines still found in the AreaMine
+; and MineIt subroutines of this script!
+;
+; Also, thanks goes out to TrailMyx for the Runebook, Journal, and FileSystem 
+; subs and Paulonius for all of the random object property lookups when I 
+; couldn't login!
+;===========================================================================
+; Mine from a runebook marked with runes to mountains/caves/etc. No coord.
+; setup required. Script auto mines tiles within a radius of the miner.
+; Good tiles are stored for future mining while bad tiles are stored to
+; be skipped in the future.
+;									  
+; Instructions - Note: Before asking, RTFM!!!             
+; 1. Runebook with home/bank and mining spots
+;      Location 1:  House (within reach of secure) or bank
+;      Location 2-14:   Mining spots                                      
+; 2. Secure on porch of house reachable from recall spot or in bankbox.
+; 3. Containers on porch or in bankbox to be used as drop bags. Script
+;    supports up to three drop containers. Drop containers can also be in
+;    the secure.
+;    NOTE: At the very least an ore drop bag needs to be selected, all others
+;          will default to the ore bag of no others are selected.
+; 4. If tinkering, ingots in secure, tinker tool in pack                  
+;          (can pull tools from secure if none in pack)                   
+; 5. Can use interactive setup or must manually set variables below       
+; 6. If not tinkering must have mining tools in secure
+;=========================================================================
+;
+set %MaxWeightOffset 45 ;Adjust to fine-tune overweight buffer (%MaxWeight = #MAXWEIGHT - %MaxWeightOffset)
+set %dragWait 10
+set %mWait 10
+set %lWait 20
+set %g_GumpSize 530_497
+set %IngotTypes ENK
+set %RuneBookTypes ZBN
+set %OreTypes DWJ_EWJ_TVJ_GWJ
+set %GemTypes AXS_TWS_UWS_VWS_ZWS_GXS_BVJ_GVF_EVF_VUF_FVF_RVF_HVF_OVF_BVF_UVF
+set %GoldTypes POF
+set %StoneTypes BVI
+set %BlackrockTypes UVF_EWF_FWF_GWF ;UVF itemtype is shared with Diamonds
+set %CrystalBRTypes MDHB
+set %SandTypes AFZ
+set %AllMinedTypes %OreTypes , _ ,
+      + %StoneTypes , _ ,
+      + %BlackrockTypes , _ , 
+      + %CrystalBRTypes , _ , 
+      + %GemTypes , _ , 
+      + %GoldTypes , _ ,
+      + %SandTypes
+set %MineToolTypes WWF_QPF_TWF_NPF
+set %ProspToolTypes GBG
+set %TinkerToolTypes JTL_GTL_KTL
+set %OreTiles 2_220_221_222_223_224_225_226_227_228_229_230_231_236_237_238_239_240_241_242_243_
+	+244_245_246_247_252_253_254_255_256_257_258_259_260_261_262_263_268_269_270_271_
+	+272_273_274_275_276_277_278_279_286_287_288_289_290_291_292_293_294_296_296_297_
+	+321_322_323_324_467_468_469_470_471_472_473_474_476_477_478_479_480_481_482_483_
+	+484_485_486_487_492_493_494_495_543_544_545_546_547_548_549_550_551_552_553_554_
+	+555_556_557_558_559_560_561_562_563_564_565_566_567_568_569_570_571_572_573_574_
+	+575_576_577_578_579_581_582_583_584_585_586_587_588_589_590_591_592_593_594_595_
+	+596_597_598_599_600_601_610_611_612_613_1010_1741_1742_1743_1744_1745_1746_1747_
+	+1748_1749_1750_1751_1752_1753_1754_1755_1756_1757_1771_1772_1773_1774_1775_1776_
+	+1777_1778_1779_1780_1781_1782_1783_1784_1785_1786_1787_1788_1789_1790_1801_1802_
+	+1803_1804_1805_1806_1807_1808_1809_1811_1812_1813_1814_1815_1816_1817_1818_1819_
+	+1820_1821_1822_1823_1824_1831_1832_1833_1834_1835_1836_1837_1838_1839_1840_1841_
+	+1842_1843_1844_1845_1846_1847_1848_1849_1850_1851_1852_1853_1854_1861_1862_1863_
+	+1864_1865_1866_1867_1868_1869_1870_1871_1872_1873_1874_1875_1876_1877_1878_1879_
+	+1880_1881_1882_1883_1884_1981_1982_1983_1984_1985_1986_1987_1988_1989_1990_1991_
+	+1992_1993_1994_1995_1996_1997_1998_1999_2000_2001_2002_2003_2004_2028_2029_2030_
+	+2031_2032_2033_2100_2101_2102_2103_2104_2105_1339_1340_1341_1342_1343_1344_1345_
+	+1346_1347_1348_1349_1350_1351_1352_1353_1354_1355_1356_1357_1358_1359_430
+
+set %SandTiles 22_23_24_25_26_27_28_29_30_31_32_33_34_35_36_37_38_39_40_41_42_43_44_45_46_47_
+	+48_49_50_51_52_53_54_55_56_57_58_59_60_61_62_68_69_70_71_72_73_74_75_286_287_288_289_
+	+290_291_292_293_294_295_296_297_298_299_300_301_402_424_425_426_427_441_442_443_444_
+	+445_446_447_448_449_450_451_452_453_454_455_456_457_458_459_460_461_462_463_464_465_
+	+642_643_644_645_650_651_652_653_654_655_656_657_821_822_823_824_825_826_827_828_833_
+	+834_835_836_845_846_847_848_849_850_851_852_857_858_859_860_951_952_953_954_955_956_
+	+957_958_967_968_969_970_1447_1448_1449_1450_1451_1452_1453_1454_1455_1456_1457_1458_
+	+1611_1612_1613_1614_1615_1616_1617_1618_1623_1624_1625_1626_1635_1636_1637_1638_1639_
+	+1640_1641_1642_1647_1648_1649_1650
+	
+set %CurrentPosition 2
+;=========================================================================
+;Begin XIIxMining!
+gosub Setup
+repeat
+   gosub MenuButtonCheck
+until #menubutton = M_TrackingStart
+
+gosub DropNStock
+gosub TM_AdvJournalSync SPELLCAST 100
+
+;mainloop
+repeat
+   if %CurrentPosition = 17
+      set %CurrentPosition 2
+   gosub TM_TravelFromRuneBook %TravelMethod %CurrentPosition %CurrentPosition %RunebookID
+   gosub XIIxMaxWeight %MaxWeightOffset
+   set %MaxWeight #RESULT
+   gosub AreaMine
+   if %Status = full
+      gosub DropNStock
+   gosub MenuButtonCheck
+until #FALSE
+;end mainloop
+
+;####################
+;SUB Setup
+;####################
+sub Setup
+   gosub TM_NGFS_DoesSaveExist XIIxMining
+   If #RESULT
+      {
+      gosub TM_NGFS_InitializeScript XIIxMining
+      gosub TM_NGFS_LoadVariables XIIxMining
+      if %Initialized = #TRUE
+         {
+	       display yesno It looks like you've used this script before. Would you like to use the settings saved from your last session?
+	       if #dispres = yes
+	          {
+	          gosub Display_M_Tracking
+	          return
+	          }
+	       }
+	    }
+
+   gosub TM_NGFS_InitializeScript XIIxMining
+   gosub TM_NGFS_RegisterVariables XIIxMining std std RunebookID SecureID OreBagID StoneBagID BlkRkBagID GemBagID ToTinker ToBank
+   gosub TM_NGFS_RegisterVariables XIIxMining std std TravelMethod SecureGmpName SecureGmpSize Initialized
+   gosub TM_NGFS_RegisterVariables XIIxMining std std IronCnt DullCnt ShadCnt CoppCnt BronCnt GoldCnt AgapCnt VeriCnt ValoCnt EcruCnt
+   gosub TM_NGFS_RegisterVariables XIIxMining std std FireCnt TurqCnt BlueCnt PerfCnt DarkCnt BlacCnt CrysCnt SandCnt DiamCnt RubyCnt StarCnt
+   gosub TM_NGFS_RegisterVariables XIIxMining std std SappCnt CitrCnt EmerCnt AmbeCnt TourCnt AmetCnt NormStnCnt DullStnCnt ShadStnCnt
+   gosub TM_NGFS_RegisterVariables XIIxMining std std CoppStnCnt BronStnCnt GoldStnCnt AgapStnCnt VeriStnCnt ValoStnCnt SandCnt
+
+   gosub Display_M_Setup
+   gosub LoadDefaults All
+   gosub TM_NGFS_SaveVariables XIIxMining
+
+   M_SetupLoop:
+   if #menubutton <> n/a
+      {
+      if #menubutton = M_SetupReset
+         {
+         Display yesno You are about to reset your dig spots, are you sure?
+         if #dispres = yes
+            {
+            set *XIIxMiningYesMine
+            set *XIIxMiningNoMine
+            Display Dig spots have been reset.
+            }
+         }
+      if #menubutton = M_SetupStart
+         {
+         menu get M_SetupTravelChoice
+            if #menures = 1
+               set %TravelMethod RE
+            if #menures = 2
+               set %TravelMethod GA
+            if #menures = 3
+               set %TravelMethod SJ
+         menu get M_SetupToTinker
+            if #menures = #true
+               set %ToTinker yes
+            if #menures = #false
+               set %ToTinker no
+         menu get M_SetupToBank
+            if #menures = #true
+               set %ToBank yes
+            if #menures = #false
+               set %ToBank no
+         if %TravelMethod = N/A
+            {
+            Display You still need to select a travel method (Recall, Gate, or Chiv)!
+            set #menubutton = n/a
+            goto M_SetupLoop
+            }
+         if %RunebookID = N/A
+            {
+            Display You still need to select a runebook!
+            set #menubutton = n/a
+            goto M_SetupLoop
+            }
+         if %SecureID = N/A
+            {
+            Display You still need to select your secure container!
+            set #menubutton = n/a
+            goto M_SetupLoop
+            }
+         if %OreBagID = N/A
+            {
+            Display You still need to select your ore bag!
+            set #menubutton = n/a
+            goto M_SetupLoop
+            }
+         if %StoneBagID = N/A
+            {
+            Display You have not selected a separate bag for stone and sand, defaulting to your Ore bag.
+            set %StoneBagID %OreBagID
+            set #menubutton = n/a
+            }
+         if %BlkRkBagID = N/A
+            {
+            Display You have not selected a separate bag for blackrock, defaulting to your Ore bag.
+            set %BlkRkBagID %OreBagID
+            set #menubutton = n/a
+            }
+         if %GemBagID = N/A
+            {
+            Display You have not selected a separate bag for Gems, defaulting to your Ore bag.
+            set %GemBagID %OreBagID
+            set #menubutton = n/a
+            }
+         menu hide
+         set %Initialized #TRUE
+         gosub TM_NGFS_SaveVariables XIIxMining
+         gosub Display_M_Tracking
+         return
+         }
+      gosub #menubutton
+      set #menubutton n/a
+      }
+   goto M_SetupLoop
+
+   sub M_SetupRunebook
+      set #targcurs 1
+      while #targcurs = 1
+         wait 1
+      finditem #ltargetid C_ , #backpackid
+      if #findtype notin %RuneBookTypes
+         {
+         Display ok That is not a Runebook or that RuneBook is not in your Backpack! Try again.
+         return
+         }
+      set %RunebookID #ltargetID
+      menu Edit M_SetupRunebookID 140 72 81 %RunebookID
+   return
+
+   sub M_SetupSecure
+      set #targcurs 1
+      while #targcurs = 1
+         wait 1
+      set %SecureID #ltargetID
+      set #lobjectID #ltargetID
+      set #nextcposx 10
+      set #nextcposy 10
+      event macro 17
+      wait %lWait
+      set %SecureGmpName #CONTNAME
+      set %SecureGmpSize #CONTSIZE
+      menu Edit M_SetupSecureID 140 100 81 %SecureID
+   return
+
+   sub M_SetupOreBag
+      set #targcurs 1
+      while #targcurs = 1
+         wait 1
+      set %OreBagID #ltargetID
+      menu Edit M_SetupOreBagID 140 128 81 %OreBagID
+   return
+
+   sub M_SetupStoneBag
+      set #targcurs 1
+      while #targcurs = 1
+         wait 1
+      set %StoneBagID #ltargetID
+      menu Edit M_SetupStoneBagID 140 212 81 %StoneBagID
+   return
+
+   sub M_SetupBlkRkBag
+      set #targcurs 1
+      while #targcurs = 1
+         wait 1
+      set %BlkRkBagID #ltargetID
+      menu Edit M_SetupBlkRkBagID 140 184 81 %BlkRkBagID
+   return
+
+   sub M_SetupGemBag
+      set #targcurs 1
+      while #targcurs = 1
+         wait 1
+      set %GemBagID #ltargetID
+      menu Edit M_SetupGemBagID 140 156 81 %GemBagID
+   return
+Return
+
+;####################
+;SUB LoadDefaults
+;####################
+; %1 = Set to All to reset everything, otherwise not applicable
+sub LoadDefaults
+   if %1 = All
+      {
+      set %TravelMethod N/A
+      set %RuneBookID N/A
+      set %SecureID N/A
+      set %OreBagID N/A
+      set %StoneBagID N/A
+      set %SecureBagID N/A
+      set %GemBagID N/A
+      set %Initialized #FALSE
+      }
+
+   ;----- Counter Reset -----
+   ;Column 1
+   set %IronCnt 0
+   set %DullCnt 0
+   set %ShadCnt 0
+   set %CoppCnt 0
+   set %BronCnt 0
+   set %GoldCnt 0
+   set %AgapCnt 0
+   set %VeriCnt 0
+   set %ValoCnt 0
+
+  ;Column 2
+   set %EcruCnt 0
+   set %FireCnt 0
+   set %TurqCnt 0
+   set %BlueCnt 0
+   set %PerfCnt 0
+   set %DarkCnt 0
+   set %BlacCnt 0
+   set %CrysCnt 0
+   set %SandCnt 0
+
+  ;Column 3
+   set %DiamCnt 0
+   set %RubyCnt 0
+   set %StarCnt 0
+   set %SappCnt 0
+   set %CitrCnt 0
+   set %EmerCnt 0
+   set %AmbeCnt 0
+   set %TourCnt 0
+   set %AmetCnt 0
+
+  ;Column 4
+   set %NormStnCnt 0
+   set %DullStnCnt 0
+   set %ShadStnCnt 0
+   set %CoppStnCnt 0
+   set %BronStnCnt 0
+   set %GoldStnCnt 0
+   set %AgapStnCnt 0
+   set %VeriStnCnt 0
+   set %ValoStnCnt 0
+Return
+
+;####################
+;MenuButtonCheck
+;####################
+sub MenuButtonCheck
+   if #menubutton = M_TrackingStart
+      {
+      menu delete M_TrackingStart
+      menu Font Size 8
+      menu Font Color WindowText
+      menu Font BGColor BtnFace
+      menu Button Pause 105 265 60 25 Pause
+      }      
+   if #menubutton = M_TrackingReset
+      {
+      gosub LoadDefaults
+      gosub Display_M_Tracking Reset
+      set #menubutton N/A
+      }
+   if #menubutton = Pause
+      {
+      gosub XIIxPause 105 265 60 25 Pause
+      set #menubutton N/A
+      }
+return
+
+;####################
+;ResourceCnt
+;####################
+;%1 #Findtype
+;%2 #Findcnt
+;%3 #Findcol
+sub ResourceCnt
+   Set %ResType %1
+   Set %ResCnt %2
+   Set %ResCol %3
+
+   if %ResType IN %BlackrockTypes && %ResCol <> 0
+      {
+      set %BlacCnt %BlacCnt + %ResCnt
+      menu set BlacCntVal %BlacCnt
+      return
+      }
+   if %ResType IN %SandTypes
+      {
+      set %SandCnt %SandCnt + %ResCnt
+      menu set SandCntVal %SandCnt
+      return
+      }
+   if %ResType IN %GemTypes || %ResType IN %CrystalBRTypes
+      {
+      if %ResType = TWS
+         {
+         set %EcruCnt %EcruCnt + %ResCnt
+         menu set EcruCntVal %EcruCnt
+         return
+         }
+      if %ResType = VWS
+         {
+         set %FireCnt %FireCnt + %ResCnt
+         Menu set FireCntVal %FireCnt
+         return
+         }
+      if %ResType = ZWS
+         {
+         set %TurqCnt %TurqCnt + %ResCnt
+         Menu set TurqCntVal %TurqCnt
+         return
+         }
+      if %ResType = GXS
+         {
+         set %BlueCnt %BlueCnt + %ResCnt
+         Menu set BlueCntVal %BlueCnt
+         return
+         }
+      if %ResType = UWS
+         {
+         set %PerfCnt %PerfCnt + %ResCnt
+         Menu set PerfCntVal %PerfCnt
+         return
+         }
+      if %ResType = AXS
+         {
+         set %DarkCnt %DarkCnt + %ResCnt
+         Menu set DarkCntVal %DarkCnt
+         return
+         }
+      if %ResType = MDHB
+         {
+         set %CrysCnt %CrysCnt + %ResCnt
+         Menu set CrysCntVal %CrysCnt
+         return
+         }
+      if %ResType = UVF
+         {
+         set %DiamCnt %DiamCnt + %ResCnt
+         menu set DiamCntVal %DiamCnt
+         return
+         }
+      if %ResType = HVF
+         {
+         set %RubyCnt %RubyCnt + %ResCnt
+         menu set RubyCntVal %RubyCnt
+         return
+         }
+      if %ResType = VUF
+         {
+         set %StarCnt %StarCnt + %ResCnt
+         menu set StarCntVal %StarCnt
+         return
+         }
+      if %ResType = FVF
+         {
+         set %SappCnt %SappCnt + %ResCnt
+         menu set SappCntVal %SappCnt
+         return
+         }
+      if %ResType = BVF
+         {
+         set %CitrCnt %CitrCnt + %ResCnt
+         menu set CitrCntVal %CitrCnt
+         return
+         }
+      if %ResType = GVF
+         {
+         set %EmerCnt %EmerCnt + %ResCnt
+         menu set EmerCntVal %EmerCnt
+         return
+         }
+      if %ResType = RVF
+         {
+         set %AmbeCnt %AmbeCnt + %ResCnt
+         menu set AmbeCntVal %AmbeCnt
+         return
+         }
+      if %ResType = OVF
+         {
+         set %TourCnt %TourCnt + %ResCnt
+         menu set TourCntVal %TourCnt
+         return
+         }
+      if %ResType = EVF
+         {
+         set %AmetCnt %AmetCnt + %ResCnt
+         menu set AmetCntVal %AmetCnt
+         return
+         }
+      }
+   if %ResType IN %OreTypes
+      {
+      if %ResType = DWJ
+         set %ResCnt %Rescnt * 2
+      if %ResType = TVJ
+         set %Rescnt %ResCnt / 2
+      if %ResCol = 0
+         {
+         set %IronCnt %IronCnt + %ResCnt
+         menu set IronCntVal %IronCnt
+         return
+         }
+      if %ResCol = 2419
+         {
+         set %DullCnt %DullCnt + %ResCnt
+         menu set DullCntVal %DullCnt
+         return
+         }
+      if %ResCol = 2406
+         {
+         set %ShadCnt %ShadCnt + %ResCnt
+         menu set ShadCntVal %ShadCnt
+         return
+         }
+      if %ResCol = 2413
+         {
+         set %CoppCnt %CoppCnt + %ResCnt
+         menu set CoppCntVal %CoppCnt
+         return
+         }
+      if %ResCol = 2418
+         {
+         set %BronCnt %BronCnt + %ResCnt
+         menu set BronCntVal %BronCnt
+         return
+         }
+      if %ResCol = 2213
+         {
+         set %GoldCnt %GoldCnt + %ResCnt
+         menu set GoldCntVal %GoldCnt
+         return
+         }
+      if %ResCol = 2425
+         {
+         set %AgapCnt %AgapCnt + %ResCnt
+         menu set AgapCntVal %AgapCnt
+         return
+         }
+      if %ResCol = 2207
+         {
+         set %VeriCnt %VeriCnt + %ResCnt
+         menu set VeriCntVal %VeriCnt
+         return
+         }
+      if %ResCol = 2219
+         {
+         set %ValoCnt %ValoCnt + %ResCnt
+         menu set ValoCntVal %ValoCnt
+         return
+         }
+      }
+   if %ResType IN %StoneTypes
+      {
+      if %ResCol = 0
+         {
+         set %NormStnCnt %NormStnCnt + %ResCnt
+         menu set NormStnCntVal %NormStnCnt
+         return
+         }
+      if %ResCol = 2419
+         {
+         set %DullStnCnt %DullStnCnt + %ResCnt
+         menu set DullStnCntVal %DullStnCnt
+         return
+         }
+      if %ResCol = 2406
+         {
+         set %ShadStnCnt %ShadStnCnt + %ResCnt
+         menu set ShadStnCntVal %ShadStnCnt
+         return
+         }
+      if %ResCol = 2413
+         {
+         set %CoppStnCnt %CoppStnCnt + %ResCnt
+         menu set CoppStnCntVal %CoppStnCnt
+         return
+         }
+      if %ResCol = 2418
+         {
+         set %BronStnCnt %BronStnCnt + %ResCnt
+         menu set BronStnCntVal %BronStnCnt
+         return
+         }
+      if %ResCol = 2213
+         {
+         set %GoldStnCnt %GoldStnCnt + %ResCnt
+         menu set GoldStnCntVal %GoldStnCnt
+         return
+         }
+      if %ResCol = 2425
+         {
+         set %AgapStnCnt %AgapStnCnt + %ResCnt
+         menu set AgapStnCntVal %AgapStnCnt
+         return
+         }
+      if %ResCol = 2207
+         {
+         set %VeriStnCnt %VeriStnCnt + %ResCnt
+         menu set VeriStnCntVal %VeriStnCnt
+         return
+         }
+      if %ResCol = 2219
+         {
+         set %ValoStnCnt %ValoStnCnt + %ResCnt
+         menu set ValoStnCntVal %ValoStnCnt
+         return
+         }
+      }
+Return
+
+;####################
+;SUB DropNStock
+;####################
+sub DropnStock
+   finditem %secureID
+   while #findkind = -1
+      {
+      gosub TM_TravelFromRuneBook %TravelMethod 1 1 %RunebookID
+      if %ToBank = yes
+         {
+         event macro 1 0 Bank
+         gosub XIIxGumpWait container_gump container_gump 180_240 ;bankbox
+         }
+      finditem %SecureID
+      }
+   set #lobjectid %SecureID
+   event macro 17
+   gosub XIIxGumpWait %SecureGmpName %SecureGmpName %SecureGmpSize
+
+   ;Deal with ghost items in pack by re-opening
+   wait %lWait
+   event macro 8 7
+   gosub XIIxGumpWait container_gump container_gump 230_204
+   
+   ;Drop Items
+   Repeat
+      finditem %AllMinedTypes C_ , #backpackid
+      if #findkind <> -1
+         {
+         repeat
+            if #findtype IN %GemTypes
+               set %DropBag %GemBagID
+            if #findtype IN %SandTypes
+               set %DropBag %OreBagID
+            if #findtype IN %CrystalBRTypes
+               set %DropBag %GemBagID
+            if #findtype IN %GoldTypes
+               set %DropBag %SecureID
+            if #findtype IN %OreTypes
+               set %DropBag %OreBagID
+            if #findtype IN %StoneTypes
+               set %DropBag %StoneBagID
+            if #findtype IN %BlackrockTypes && #findcol <> 0
+               set %DropBag %BlkRkBagID
+            set %ItemType #findtype
+            set %ItemCount #findstack
+            set %ItemColor #findcol
+            gosub XIIxMoveStuff #findid #backpackid %ItemCount %DropBag
+         until #RESULT = #TRUE
+         gosub ResourceCnt %ItemType %ItemCount %ItemColor
+         gosub TM_NGFS_SaveVariables XIIxMining
+         finditem %AllMinedTypes C_ , #backpackid
+         }
+   Until #findkind = -1
+      
+   ;Stock Items
+   if %ToTinker = yes
+      {
+      finditem %IngotTypes C_ , #backpackid
+      if #findstack < 20
+         {
+         set %amount 20 - #findstack
+         finditem %IngotTypes C_ , %SecureID
+         if #findstack < %amount
+            {
+            display You need to have at least 20 iron ingots to continue, get some more ingots and resume. Script pausing.
+            Gosub XIIxPause 105 265 60 25 Pause
+            }
+         else
+            gosub XIIxMoveStuff #findid %SecureID %Amount #backpackid
+         }
+         
+      repeat
+         finditem %TinkerToolTypes C_ , #backpackid
+         set %_cnt #findcnt
+         if %_cnt < 2
+            {
+            finditem %TinkerToolTypes C_ , %SecureID
+            if #findkind = -1
+               gosub XIIxTinker Tools
+            else
+               gosub XIIxMoveStuff #findid %SecureID 1 #backpackid
+            }
+         else
+            {
+            if #findkind = -1
+               {
+               Display You seem to be out of tinker tools with no way to make more. Script pausing.
+               Gosub XIIxPause 105 265 60 25 Pause
+               }
+            }
+      until %_cnt > 1
+      }
+      
+   repeat
+      finditem %MineToolTypes C_ , #backpackid
+      if #findcnt < 2
+         {
+         finditem %MineToolTypes C_ , %SecureID
+         if #findcnt < 1
+            {
+            if %ToTinker = no
+               {
+               display You are out of mining tools, get more tools and resume. Script pausing.
+               gosub XIIxPause 105 265 60 25 Pause
+               }
+            if %ToTinker = yes
+               gosub XIIxTinker Shovel
+            }
+         else
+            gosub XIIxMoveStuff #findid %SecureID 1 #backpackid
+         }
+   until #findcnt >= 2
+   gosub MenuButtonCheck
+Return
+
+;####################
+;SUB AreaMine
+;####################
+sub AreaMine
+   set %dx #charposx - 2
+   set %dy #charposy - 2
+
+   for %a 1 5
+      {
+      for %b 1 5
+         {
+         tile init
+         tile cnt %dx %dy
+         for %c 1 #tilecnt
+            {
+            tile get %dx %dy %c
+            ;if #tiletype in %OreTiles
+               ;{
+               set %checkmineable _ , %dx , _ , %dy , _ , #tilez
+               if %checkmineable in *XIIxMiningNoMine && %c >= #tilecnt
+                  goto _next_tile
+               if %checkmineable in *XIIxMiningYesMine
+                  {
+                  set %minedbefore yes
+                  gosub MineIt %dx %dy #tilez %minedbefore
+                  if %status = full
+                     return
+                  if %c >= #tilecnt
+                     goto _next_tile
+                  }
+               if %checkmineable notin *XIIxMiningNoMine && %checkmineable notin *XIIxMiningYesMine
+                  {
+                  set %minedbefore no
+                  gosub MineIt %dx %dy #tilez %minedbefore
+                  if %status = full
+                     return
+                  }
+               ;}
+            }
+         _next_tile:
+         set %dy %dy + 1
+         }
+      set %dy #charposy - 2
+      set %dx %dx + 1
+      }
+   set %CurrentPosition %CurrentPosition + 1
+return
+
+;####################
+;SUB MineIt
+;####################
+sub MineIt
+   set %status
+   set %minex %1
+   set %miney %2
+   set %minez %3
+   set %Checked %4
+   set #ltargetx %minex
+   set #ltargety %miney
+   set #ltargetz %minez
+   set %StopMining #FALSE
+
+   repeat
+      if #weight >= %MaxWeight
+         {
+         set %status full
+         return
+         }
+
+      repeat
+         finditem %MineToolTypes C_ , #backpackid
+         set %ShovelCnt #findcnt
+         if %ShovelCnt < 1 && %ToTinker = yes
+            {
+            repeat
+               finditem %TinkerToolTypes C_ , #backpackid
+               if #findkind = -1
+                  gosub DropNStock
+               if #findcnt < 2
+                  gosub XIIxTinker Tools
+            until #findcnt >= 2
+            gosub XIIxTinker Shovel
+            }
+         if %ShovelCnt < 1 && %ToTinker <> yes
+            {
+            gosub DropNStock
+            gosub TM_TravelFromRuneBook %TravelMethod %CurrentPosition %CurrentPosition %RunebookID
+            if #RESULT = #TRUE
+               {
+               set %CurrentPosition %CurrentPosition + 1
+               return
+               }
+            }
+      until %ShovelCnt >= 1
+
+      set %jindexvalue #jindex + 1
+      ;finditem %MineToolTypes C_ , #backpackid
+      set #lobjectid #findid
+      set #ltargetkind 2
+      event macro 17
+      target 3s
+      event macro 22
+      wait %lWait
+
+      if #jindex >= %JindexValue
+         {
+         for %i %jindexvalue #jindex
+            {
+            scanjournal %i
+            if %Checked = no && ( in_your_backpack in #journal || you_have_dug_up in #journal 
+               + || you_have_found in #journal || you_carefully_extract in #journal || sifting_through_the in #journal 
+               + || you_uncover_a in #journal || you_carefully_dig_up in #journal )
+               {
+               set %IgnoreTileYesNo _ , %minex , _ , %miney , _ , %minez
+               set *XIIxMiningYesMine *XIIxMiningYesMine , %IgnoreTileYesNo
+               set %Checked yes
+               }
+            if no_metal_here in #journal || There_is_no_sand in #journal
+               set %Stopmining #True
+            if cannot_see in #journal || can't_mine_there in #journal || ( no_metal_here in #journal && %Checked = no )
+               + || ( There_is_no_sand in #journal && %Checked = no )
+               {
+               set %IgnoreTileYesNo _ , %minex , _ , %miney , _ , %minez
+               set *XIIxMiningNoMine *XIIxMiningNoMine , %IgnoreTileYesNo
+               set %Stopmining #TRUE
+               }
+            }
+         gosub MenuButtonCheck
+         }
+   Until %Stopmining
+return
+
+;####################
+;SUB XIIxMaxWeight
+;####################
+; %1 = Maxweight offset
+sub XIIxMaxWeight
+   Namespace Push
+   Namespace Local nsXIIxMaxWeight
+   set !offset %1
+   If #maxweight = N/A
+      {
+      event macro 8 2
+      wait 5
+      event macro 10 2
+      }
+
+   set !MaxWeight #MaxWeight
+
+   finditem #CHARID
+   if #findtype NOTIN AV_XU_OCB_NCB ;char is human
+      set !MaxWeight !MaxWeight + 60
+      
+   if !MaxWeight > 550
+      set !MaxWeight 550 ;Backpack maximum
+
+   set !MaxWeight !MaxWeight - !offset ;Adjust as see fit for overfull buffer
+   set #RESULT !MaxWeight
+   namespace clear
+   Namespace pop
+Return #RESULT
+
+;#######################
+;SUB XIIxMoveStuff
+;#######################
+; %1 ItemType or ID to move
+; %2 Container to move from
+; %3 Number of items to move
+; %4 Container to move to
+; Returns #FALSE if item to move is not found or #TRUE if successful
+sub XIIxMoveStuff
+   Namespace Push
+   Namespace Local nsXIIxMoveStuff
+   set !Item2Move %1
+   set !SourceContainer %2
+   set !Amount2Move %3
+   set !TargetContainer %4
+   set !sWait 10
+   
+   finditem !Item2Move C_ , !SourceContainer
+   if #findkind = -1
+	    set #RESULT #FALSE
+   else
+      {
+      if #findstack < !Amount2Move
+         set !Amount2Move #findstack
+      exevent drag #findid !Amount2Move
+      wait !sWait
+      exevent dropc !TargetContainer
+      wait !sWait
+
+	    finditem !Item2Move C_ , !SourceContainer
+	    if #findkind <> -1 ;means it didn't move
+		     set #RESULT #FALSE
+		  else
+		     set #RESULT #TRUE
+      }
+   namespace clear
+   Namespace Pop
+return #RESULT
+
+;#######################
+;SUB XIIxPause
+;#######################
+; %1 = Button position 1
+; %2 = Button position 2
+; %3 = Button position 3
+; %4 = Button position 4
+; %5 = Button Name
+; e.g. "gosub pause 340 92 40 25 Pause"
+Sub XIIxPause
+   namespace push
+   namespace local XIIxPause
+   set !1 %1
+   set !2 %2
+   set !3 %3
+   set !4 %4
+   set !5 %5
+   menu set Status Status: Paused
+   menu delete !5
+   menu Font BGColor BtnFace
+   menu Font Color WindowText
+   menu button resume !1 !2 !3 !4 Resume
+   set #menubutton N/A
+   while #menubutton <> Resume
+      wait 1
+   menu delete resume
+   menu Font BGColor BtnFace
+   menu Font Color WindowText
+   menu Button !5 !1 !2 !3 !4 !5
+   menu set Status Status: Working...
+   namespace pop
+Return
+
+;####################
+;SUB XIIxTinker
+;####################
+sub XIIxTinker
+   namespace push
+   namespace local nsXIIxTink
+   set !ItemToMake %1
+   set !TinkerToolTypes JTL_GTL_KTL
+   set !CraftGumpSize 530_497
+   repeat
+      finditem !TinkerToolTypes C_ , #backpackid
+      set #lobjectid #findid
+      event macro 17
+      gosub XIIxGumpWait generic_gump generic_gump !CraftGumpSize
+   until #RESULT = #TRUE
+   
+   if !TinkerLast = !ItemToMake
+      {
+      gosub XIIxClickNWait 280 450 #TRUE generic_gump !CraftGumpSize ;make last
+      gosub XIIxClickNWait 30 450 #FALSE ;exit
+      return
+      }
+   if !ItemToMake = Tools
+      {
+      set !TinkerLast Tools
+      gosub XIIxClickNWait 30 130 #TRUE generic_gump !CraftGumpSize ;tools
+      gosub XIIxClickNWait 230 130 #TRUE generic_gump !CraftGumpSize ;tinker tools
+      gosub XIIxClickNWait 30 450 #FALSE ;exit
+      }
+   if !ItemToMake = Shovel
+      {
+      set !TinkerLast Shovel
+      gosub XIIxClickNWait 30 130 #TRUE generic_gump !CraftGumpSize ;tools
+      gosub XIIxClickNWait 380 270 #TRUE generic_gump !CraftGumpSize ;next
+      gosub XIIxClickNWait 230 70 #TRUE generic_gump !CraftGumpSize ;shovel
+      gosub XIIxClickNWait 30 450 #FALSE ;exit
+      }
+   namespace pop
+return
+
+;#######################
+;SUB XIIxClickNWait
+;#######################
+; %1 = Required: Xoffset
+; %2 = Required: Yoffset
+; %3 = Required: #TRUE to wait for gump, any other value to return after click
+; %4 = Required if %3 is #TRUE: Gump_Name
+; %5 = Required if %3 is #TRUE: Gump_Size
+sub XIIxClickNWait
+   namespace push
+   namespace local nsXIIxClickNWait
+   set !clickx #contposx + %1
+   set !clicky #contposy + %2
+   set !gName1 %4
+   set !gName2 %4
+   set !gSize %5
+   click !clickx !clicky
+   if %3 <> #TRUE
+      {
+      namespace clear
+      namespace pop
+      return
+      }
+   if %0 > 3
+      gosub XIIxGumpWait !gName1 !gName2 !gSize
+   namespace clear
+   namespace pop
+return
+
+;#######################
+;SUB XIIxGumpWait
+;#######################
+; %1 = Required: Gumpname 1
+; %2 = Required only if using Gumpsize: Gumpname 2
+; %3 = Optional: Gumpsize
+; Returns #TRUE if gump occured before timeout, #FALSE if timeout occured
+sub XIIxGumpWait
+   namespace push
+   namespace local nsXIIxGumpWait
+   wait 10
+   set !gName1 %1
+   set !gName2 %2
+   set !gSize %3
+   set !_time #SCNT
+   while #SCNT <= !_time + 5
+      {
+      if %0 > 2
+         {
+         if ( #CONTNAME = !gName1 && #CONTSIZE = !gSize ) || ( #CONTNAME = !gName2 && #CONTSIZE = !gSize )
+            {
+            namespace clear
+            namespace pop
+            return #TRUE
+            }
+         }
+      else
+         {
+         if #CONTNAME = !gName1 || #CONTNAME = !gName2
+            { 
+            namespace clear
+            namespace pop
+            return #TRUE
+            }
+         }
+      }
+   namespace clear
+   namespace pop
+return #FALSE
+
+;---------------------------------START TM SUBS---------------------------------;
+;####################
+;TM_TravelFromRunebook
+;####################
+; %1 = Method (RE, GA, SJ)
+; %2 = index location within runebook (1-16)
+; %3 = index location within runebook (1-16), try up to this point
+; %4 = runebook item id
+; returns #TRUE if error, #FALSE for no error
+sub TM_TravelFromRunebook
+  namespace push
+  namespace local RFR
+  set #LTARGETKIND 1
+  set !method %1
+  set !locindex %2
+  set !locindexend %3
+  set !rbook %4
+
+  finditem !rbook C_ , #BACKPACKID
+  if !method notin RE_GA_SJ || #FINDKIND = -1
+  {
+    namespace pop
+    return #TRUE
+  }
+  if !locindex notin 1_2_3_4_5_6_7_8_9_10_11_12_13_14_15_16
+  {
+    namespace pop
+    return #TRUE
+  }
+  if !locindexend notin 1_2_3_4_5_6_7_8_9_10_11_12_13_14_15_16
+  {
+    namespace pop
+    return #TRUE
+  }
+
+  TravelFromRunebook_loop1:
+    set #LOBJECTID !rbook
+    set #LTARGETKIND 1
+    event macro 17 0
+    gosub XIIxGumpWait generic_gump generic_gump
+
+    set !runeclickx 140 ; page 1, rune 1
+    set !runeclickx ( #CONTPOSX + !runeclickx + ( 35 * ( ( !locindex - 1 ) / 2 ) ) )
+    if !locindex > 8
+    {
+      set !runeclickx 310 ; page 2, rune 1
+      set !runeclickx ( #CONTPOSX + !runeclickx + ( 35 * ( ( !locindex - 9 ) / 2 ) ) )
+    }
+    set !runeclicky #CONTPOSY + 196
+    click !runeclickx !runeclicky
+    wait 5
+
+    set !runeclicky #CONTPOSY + 24
+    set !runeclickx #CONTPOSX + 164 ; page 1 set to default
+    if !locindex % 2 = 0
+    {
+      set !runeclickx #CONTPOSX + 305 ; page 2 set to default
+    }
+    click !runeclickx !runeclicky
+    wait 5
+    set !oldx #CHARPOSX
+    set !oldy #CHARPOSY
+    if !method = RE
+      gosub TM_NewCastSpell 31 !rbook -1 10 10 ; recall until successful
+    if !method = GA
+    {
+      gosub TM_NewCastSpell 51 !rbook -1 10 20 ; gate until successful
+      set !temp_cnt #SCNT + 10
+      repeat
+        finditem KEF_OTF_JEF G_0
+      until #FINDKIND <> -1 || #SCNT > !temp_cnt
+      if #FINDKIND <> -1
+      {
+        set #LOBJECTID #FINDID
+        wait 10
+        event macro 17 0
+        wait 20
+        if #CONTNAME = generic_gump && #CONTSIZE = 420_280
+        {
+          gosub TM_AdvJournalSync SPELLCAST 100
+          set !clickx #CONTPOSX + 26
+          set !clicky #CONTPOSY + 261
+          click !clickx !clicky ; click ok
+        }
+      }
+      else
+         goto TravelFromRunebook_loop1
+    }
+
+    if !method = SJ
+      gosub TM_NewCastSpell 210 !rbook -1 10 30 ; sacred journey until successful
+    wait 30
+
+    set !tempscnt #SCNT + 10
+  WaitforTravel_loop1:
+    gosub TM_AdvJournalScan SPELLCAST NONE spell_fizzles location_is_blocked something_is_blocking your_spirit_lacks encumbered_to_move
+    if #RESULT = #TRUE
+    {
+      gosub TM_AdvJournalSync SPELLCAST 100
+      set !locindex !locindex + 1
+      if !locindex > !locindexend
+      {
+        namespace pop
+        return #TRUE
+      }
+      goto TravelFromRunebook_loop1
+    }
+    if ( ( #CHARPOSX = !oldx && #CHARPOSY = !oldy ) && #SCNT < !tempscnt )
+      goto WaitforTravel_loop1
+
+  if #CONTNAME = generic_gump && #CONTSIZE = 452_236 ; RunUO close runebook
+  {
+    set !clickx #CONTPOSX + 120
+    set !clicky #CONTPOSY + 60
+    click !clickx !clicky mc r
+    wait 5
+  }
+  namespace pop
+  click 401 254 n
+return #FALSE
+
+;####################
+;SUB TM_NewCastSpell
+;####################
+; %1 = spell number
+; %2 = #TARGETID or SELF or NONE
+; %3 = retry count (-1 = cast until successful)
+; %4 = cast delay
+; %5 = recovery delay
+sub TM_NewCastSpell
+  namespace push
+  namespace local NCS
+  set !lpc #LPC
+  set #LPC 100
+  set !whichspell %1
+  set !whichtarget %2
+  set !castretrymax %3
+  set !waitdelay %4
+  set !recovery_delay %5
+
+  set !castretry 0
+  set !temp_ltargetid #LTARGETID
+  set !temp_ltargetkind #LTARGETKIND
+
+  NewCastSpell_loop1:
+    if !castretrymax < 0
+      goto NewCastSpell_cont1
+    if !castretry > !castretrymax
+      goto NewCastSpell_end1
+    NewCastSpell_cont1:
+      gosub TM_AdvJournalSync SPELLCAST 100
+      set #LTARGETKIND 1
+      set #LTARGETID !whichtarget
+      set !tempmana #MANA
+      event macro 15 !whichspell ; cast the spell
+      wait !waitdelay
+      set !targettimeout #SCNT + 7
+      NewCastSpell_wait1:
+        gosub TM_AdvJournalScan SPELLCAST NONE spell_fizzles you_have_not_yet mana your_spirit more_reagents
+        if #RESULT = #TRUE || #SCNT > !targettimeout
+        {
+          set !casttimeout #SCNT2 + !recovery_delay
+          repeat
+          until #SCNT2 > !casttimeout     ; finish up cast delay
+          set !castretry !castretry + 1
+          goto NewCastSpell_loop1
+        }
+        if !whichtarget = NONE
+          goto NewCastSpell_skip1
+        if #TARGCURS = 1
+          goto NewCastSpell_targ1
+        goto NewCastSpell_wait1 ; wait for target cursor
+
+  NewCastSpell_targ1:
+    if !whichtarget = SELF
+      event macro 23
+    else
+      event macro 22
+
+  NewCastSpell_skip1:
+    wait 5
+    set !casttimeout #SCNT2 + !recovery_delay
+    NewCastSpell_skip2:
+      if !whichspell >= 0 && !whichspell <= 63 ; Magery
+      {
+        gosub TM_AdvJournalScan SPELLCAST NONE spell_fizzles there_is_already mana your_spirit more_reagents
+      }
+      else
+      {
+        set !cont #FALSE  ; Chivalry, Necromancy, etc
+        finditem !whichtarget *
+        if !whichtarget in SELF_NONE || #FINDKIND <> -1
+          set !cont #TRUE
+
+        if #MANA >= !tempmana && !cont = #TRUE ; check if target is still there
+          set #RESULT #TRUE
+        else
+          set #RESULT #FALSE
+      }
+      repeat
+      until #SCNT2 > !casttimeout     ; finish up cast delay
+      if #RESULT = #TRUE
+      {
+        if !castretrymax > -1
+        {
+          set !castretry !castretry + 1 ; %castretrymax of -1 will cast until successful
+          if !castretry > !castretrymax
+            goto NewCastSpell_end1
+        }
+        goto NewCastSpell_loop1
+      }
+      if #SCNT2 <= !casttimeout     ; finish up cast delay
+        goto NewCastSpell_skip2
+  NewCastSpell_end1:
+    set #LTARGETID !temp_ltargetid
+    set #LTARGETKIND !temp_ltargetkind
+    set #LPC !lpc
+    namespace pop
+return
+
+;####################
+;SUB TM_AdvJournalSync
+;####################
+; %1 - Journal Name
+; %2 - #LPC setting (optional)
+; Brings !_jindex up to the most recent #journal entry
+sub TM_AdvJournalSync
+  namespace push
+  namespace local TM_AdvJS_ , %1
+  set !_jindex #jindex + 1
+  if %0 > 1
+    set !lpc_set %2
+  namespace pop
+  set !TM_FunctionCalled #TRUE
+return
+
+;####################
+;SUB TM_AdvJournalScan
+;####################
+; %1 - Journal Name
+; %2 - NONE, ADVANCE , ( _VALID ) - advances jindex pointer, anything else
+; %3, %4, %5, etc strings to match
+; returns #TRUE for match, #FALSE for no match
+;  Will not advance !_jindex pointer to allow for scanning journal history for more than one search.
+;  Also searches for : , #SPC in journal entry to be sure someone isn't spamming the text
+;  About %2 arguments:
+;    NONE: defaults to basic journal scan (no SPAM checking, no #jindex pointer copy advancing)
+;    ADVANCE: no spam checking, advances #jindex copy
+;    VALID: invokes SPAM filtering, no advance of #jindex copy
+;    VALID_ADVANCE, VALIDADVANCE, ADVANCE_VALID, etc.: invokes SPAM filtering, advances of #jindex copy
+sub TM_AdvJournalScan
+  namespace push
+  namespace local TM_AdvJS_ , %1
+  set !args %2
+  set !temp_lpc #LPC
+  if !lpc_set = N/A
+    set #LPC 1000
+  else
+    set #LPC !lpc_set
+  set !num_args %0
+  set !first_arg 3
+  if !_jindex = N/A
+    set !_jindex #jindex
+  if !charname = N/A
+  {
+    set !charname #CHARNAME
+    AdvJournalScan_loop1:
+      str pos !charname #SPC
+      if #STRRES <> 0
+      {
+        set !val #STRRES - 1
+        str left !charname !val
+        set !left #STRRES
+        set !val !val + 1
+        str del !charname 1 !val
+        set !charname !left , _ , #STRRES
+        goto AdvJournalScan_loop1
+      }
+  }
+  set !index !first_arg
+  repeat
+    set !temp_jindex !_jindex
+    set !text % . !index
+    while !temp_jindex <= #jindex
+    {
+      scanjournal !temp_jindex
+      str pos #JOURNAL !charname 1
+      set !namepos #STRRES
+      str count #JOURNAL !charname
+      set !namecnt #STRRES
+      str pos #JOURNAL :_ 1
+      set !smcpos #STRRES
+      str pos #JOURNAL !text 1
+      set !textpos #STRRES
+      if !textpos < !smcpos && !smcpos <> 0 || !smcpos = 1 || :_ notin #JOURNAL || VALID notin !args
+        set !pass #TRUE
+      else
+        set !pass #FALSE
+      if ( !text in #journal && ( ( !namepos = 1 && !namecnt <= 1 ) || !pass ) )
+      {
+        set !temp_jindex !temp_jindex + 1
+        if ADVANCE in !args
+          set !_jindex !temp_jindex
+        set #LPC !temp_lpc
+        namespace pop
+        set !TM_FunctionCalled #TRUE
+        return #TRUE
+      }
+      set !temp_jindex !temp_jindex + 1
+    }
+    set !index !index + 1
+  until !index - !first_arg > !num_args - !first_arg
+  set #LPC !temp_lpc
+  namespace pop
+  set !TM_FunctionCalled #TRUE
+return #FALSE
+
+;####################
+;SUB TM_NGFS_InitializeScript
+;####################
+; %1 - ScriptName
+; %2 = (opt) generic : add this tag to create a generic (non-character relative data set)
+sub TM_NGFS_InitializeScript
+  namespace push
+  namespace local TM_NGFS , _ , %1
+  namespace clear
+  set !lpc #LPC
+  set #LPC 10000
+  if %0 = 0
+  {
+    display ok You must name your script, spaces will be converted to underscores.
+    stop
+  }
+  set !TM_FSSIZE 1000 ; do not change this!!
+  set !script_name %1
+  set !args %0
+  gosub AddUnderscore !script_name
+  set !script_name #RESULT
+  if !args = 1
+  {
+    gosub AddUnderscore #SHARD
+    set !slot #CHARID , _ , #RESULT , _ , !script_name , _vars
+  }
+  else
+  {
+    set !slot generic , _ , !script_name , _vars
+  }
+  set ! . !slot
+  set !varcnt 0
+  set !index 0
+  set !script_index N/A
+  while *TM_FS . !index <> N/A
+  {
+    if *TM_FS . !index = !slot
+    {
+      set !script_index !index
+      break
+    }
+    set !index !index + 1
+  }
+  if !script_index = N/A
+  {
+    set !script_index !index
+    set *TM_FS . !script_index !slot
+  }
+  set #LPC !lpc
+  namespace pop
+  set !TM_Function_found #TRUE
+return
+
+;####################
+;SUB TM_NGFS_RegisterVariables
+;####################
+; %1 - ScriptName
+; %2 - NSType (local, global, std)  --> std is a %var
+; %3 - NSName (std) --> std is a %var
+; %4, %5, %6, etc. variable names (don't include the % or ! - so %var becomes var, etc)
+sub TM_NGFS_RegisterVariables
+  if %0 <= 3
+  {
+    display ok Not enough arguments
+    stop
+  }
+  namespace push
+  namespace local TM_NGFS , _ , %1
+  if !slot = N/A
+  {
+    display ok You must name your script and also run TM_NGFS_InitializeScript first.
+    stop
+  }
+  set !nstype %2
+  set !nsname %3
+  for !i 4 %0
+  {
+    set !var % . !i
+    if !nstype ,  , !nsname ,  , !var notin ! . !slot
+    {
+      set !newval ! . !slot
+      set ! . !slot !newval , !nstype ,  , !nsname ,  , !var , 
+      set !varcnt !varcnt + 1
+    }
+  }
+  namespace pop
+  set !TM_Function_found #TRUE
+return
+
+;####################
+;SUB TM_NGFS_SaveVariables
+;####################
+; %1 - ScriptName
+; assuming you have registered the variables, then everything will be saved in one call
+sub TM_NGFS_SaveVariables
+  if %0 = 0
+  {
+    display ok You must name your script, spaces will be converted to underscores.
+    stop
+  }
+  namespace push
+  namespace local TM_NGFS , _ , %1
+  if !TM_FSSIZE = N/A
+  {
+    display ok You must first call TM_NGFS_InitializeScript and have$registered variables with TM_NGFS_RegisterVariables - STOPPING.
+    stop
+  }
+  set !lpc #LPC
+  set #LPC 10000
+  set !outstring
+  set !start 1
+  set !sepcnt 1
+  set !line_count 0
+  set !temp_str ! . !slot
+
+  for !i 1 !varcnt
+  {
+    gosub ReadItem ! . !slot
+    set !nstype #RESULT
+    gosub ReadItem ! . !slot
+    set !nsname #RESULT
+    gosub ReadItem ! . !slot
+    set !var #RESULT
+    if std in !nstype
+    {
+      set !val % . !var
+    }
+    else
+    {
+      namespace copy !var from !nstype !nsname
+      set !val ! . !var
+    }
+    set !outstring !outstring , !nstype ,  , !nsname ,  , !var ,  , !val , 
+    str len !outstring
+    if #STRRES >= !TM_FSSIZE
+    {
+      set * . !slot , !line_count !outstring
+      set !outstring
+      set !line_count !line_count + 1
+      set !start !start - 1
+      str del ! . !slot 1 !start
+      set ! . !slot #STRRES
+      set !start 1
+      set !sepcnt 1
+    }
+  }
+  str len !outstring
+  if #STRRES > 0
+  {
+    set * . !slot , !line_count !outstring
+    set !line_count !line_count + 1
+  }
+  set * . !slot , !line_count N/A ; make sure there's nothing left at end of the list
+  set #LPC !lpc
+  set ! . !slot !temp_str
+  namespace pop
+  set !TM_Function_found #TRUE
+return
+
+;####################
+;SUB TM_NGFS_LoadVariables
+;####################
+; %1 - ScriptName
+; note you have to call TM_NGFS_InitializeScript
+sub TM_NGFS_LoadVariables
+  if %0 = 0
+  {
+    display ok You must name your script, spaces will be converted to underscores.
+    stop
+  }
+  namespace push
+  namespace local TM_NGFS , _ , %1
+  if !TM_FSSIZE = N/A
+  {
+    display ok You must first call TM_NGFS_InitializeScript - STOPPING.
+    stop
+  }
+  set !lpc #LPC
+  set #LPC 10000
+  set !start 1
+  set !sepcnt 1
+  set !line_count 0
+  set !temp !slot , !line_count
+  set !string * . !temp
+  set ! . !slot
+  set !varcnt 0
+  set !continue #TRUE
+  while !continue = #TRUE
+  {
+    gosub ReadItem !string
+    if !continue = #TRUE
+    {
+      set !nstype #RESULT
+      gosub ReadItem !string
+      set !nsname #RESULT
+      gosub ReadItem !string
+      set !var #RESULT
+      gosub ReadItem !string
+      set !val #RESULT
+      if std in !nstype
+      {
+        set % . !var !val
+      }
+      else
+      {
+        set ! . !var !val
+        namespace copy !var to !nstype !nsname
+      }
+      set !newval ! . !slot
+      set ! . !slot !newval , !nstype ,  , !nsname ,  , !var , 
+      set !varcnt !varcnt + 1
+    }
+    if !continue = #FALSE
+    {
+      set !line_count !line_count + 1
+      set !temp !slot , !line_count
+      set !string * . !temp
+      set !start 1
+      set !sepcnt 1
+      if !string <> N/A
+        set !continue #TRUE ; still more to process
+    }
+  }
+  set #LPC !lpc
+  namespace pop
+  set !TM_Function_found #TRUE
+return
+
+;####################
+;SUB TM_NGFS_DoesSaveExist
+;####################
+; %1 - ScriptName
+; #RESULT = #TRUE - exists, #FALSE - doesn't exist
+; note: this is relative to the current character.
+sub TM_NGFS_DoesSaveExist
+  namespace push
+  namespace local TM_NGFS , _ , %1
+  set !lpc #LPC
+  set #LPC 10000
+  set !script_name %1
+  set !args %0
+  gosub AddUnderscore !script_name
+  set !script_name #RESULT
+  if !args = 1
+  {
+    gosub AddUnderscore #SHARD
+    set !tempslot #CHARID , _ , #RESULT , _ , !script_name , _vars
+  }
+  else
+  {
+    set !tempslot generic , _ , !script_name , _vars
+  }
+  set !index 0
+  set #RESULT #FALSE
+  while *TM_FS . !index <> N/A
+  {
+    if *TM_FS . !index = !tempslot
+    {
+      set #RESULT #TRUE
+      break
+    }
+    set !index !index + 1
+  }
+  set #LPC !lpc
+  namespace pop
+  set !TM_Function_found #TRUE
+return #RESULT
+
+;####################
+;SUB ReadItem
+;####################
+sub ReadItem
+  str pos %1  !sepcnt
+  if #STRRES <> 0
+  {
+    set !len #STRRES - !start
+    str mid %1 !start !len
+    set !start !start + !len + 1
+    set !sepcnt !sepcnt + 1
+    return #STRRES
+  }
+  set !continue #FALSE
+return #TRUE
+
+;####################
+;SUB TM_NGFS_DeleteName
+;####################
+; TM_NGFS_DeleteName
+; %1 = script name tag
+; %2 = (opt) generic : add this tag to create a generic (non-character relative data set)
+; note: this will also clean up the data stored within the data set
+sub TM_NGFS_DeleteName
+  namespace push
+  namespace local TM_NGFS , _ , %1
+  set !lpc #LPC
+  set #LPC 10000
+  set !script_name %1
+  set !args %0
+  gosub AddUnderscore !script_name
+  set !script_name #RESULT
+  if !args = 1
+  {
+    gosub AddUnderscore #SHARD
+    set !tempslot #CHARID , _ , #RESULT , _ , !script_name , _vars
+  }
+  else
+  {
+    set !tempslot generic , _ , !script_name , _vars
+  }
+  set !index 0
+  set #RESULT #FALSE
+  set !start #FALSE
+  while *TM_FS . !index <> N/A
+  {
+    if *TM_FS . !index = !tempslot
+      set !start #TRUE
+    if !start = #TRUE
+    {
+      set !next !index + 1
+      set *TM_FS . !index *TM_FS . !next 
+    }
+    set !index !index + 1
+  }
+  if !start = #TRUE
+  {
+    set !index 0
+    while !tempslot . !index <> N/A
+    {
+      set !tempslot . !index N/A
+      set !index !index + 1
+    }
+  }
+  set #LPC !lpc
+  namespace pop
+  set !TM_Function_found #TRUE
+return #RESULT
+
+;####################
+;SUB AddUnderscore
+;####################
+; %1 - string to mung
+sub AddUnderscore
+  namespace push
+  namespace local AU
+  set !tempstring %1
+  AddUnderscore_loop1:
+    str pos !tempstring #SPC
+    if #STRRES <> 0
+    {
+      set !val #STRRES - 1
+      str left !tempstring !val
+      set !left #STRRES
+      set !val !val + 1
+      str del !tempstring 1 !val
+      set !tempstring !left , _ , #STRRES
+      goto AddUnderscore_loop1
+    }
+  set #RESULT !tempstring
+  namespace pop
+return #RESULT
+;---------------------------------END TM SUBS---------------------------------;
+;####################
+;SUB Display_M_Setup
+;####################
+sub Display_M_Setup
+	menu Clear
+	menu Window Title XIIxOveR's Mining for Dummies
+	menu Window Color Gray
+	menu Window Size 255 299
+	menu Font Transparent #true
+	menu Font Align Right
+	menu Font Name Comic Sans MS
+	menu Font Size 12
+	menu Font Style bi
+	menu Font Color Black
+	menu Font Transparent #false
+	menu Font Align Center
+	menu Font BGColor Gray
+	menu Text Title 60 0 XIIxMining Setup
+	menu Shape M_SetupBorder 8 24 241 277 4 7 3 Maroon 7 Gray
+	menu Font Name MS Sans Serif
+	menu Font Size 7
+	menu Font Style b
+	menu Font Align Left
+	menu Check M_SetupToTinker 36 244 120 17 #false Tinker Shovels
+	menu Check M_SetupToBank 148 244 85 17 #false Use Bank
+	menu Font Style 
+	menu Font BGColor Window
+	menu Combo Create M_SetupTravelChoice 60 40 133
+	menu Combo Add M_SetupTravelChoice Recall
+	menu Combo Add M_SetupTravelChoice Gate
+	menu Combo Add M_SetupTravelChoice Chivalry
+	menu Font Style 
+	menu Font Color WindowText
+	menu Font BGColor BtnFace
+	menu Button M_SetupGemBag 36 156 81 21 Set Gem Bag
+	menu Button M_SetupStoneBag 36 212 81 21 Set Stone Bag
+	menu Button M_SetupBlkRkBag 36 184 81 21 Set BlkRk Bag
+	menu Button M_SetupRunebook 36 72 81 21 Set Runebook
+	menu Button M_SetupSecure 36 100 81 21 Set Secure
+	menu Button M_SetupOreBag 36 128 81 21 Set Ore Bag
+	menu Button M_SetupReset 132 268 80 25 Dig Spot Reset
+	menu Button M_SetupStart 60 268 53 25 Start
+	menu Font Color Black
+	menu Font BGColor White
+	menu Edit M_SetupGemBagID 140 156 81 - , #spc , Set , #spc , -
+	menu Edit M_SetupStoneBagID 140 212 81 - , #spc , Set , #spc , -
+	menu Edit M_SetupBlkRkBagID 140 184 81 - , #spc , Set , #spc , -
+	menu Edit M_SetupRunebookID 140 72 81 - , #spc , Set , #spc , -
+	menu Edit M_SetupSecureID 140 100 81 - , #spc , Set , #spc , -
+	menu Edit M_SetupOreBagID 140 128 81 - , #spc , Set , #spc , -
+	menu show 300 0
+return
+
+;####################
+;SUB Display_M_Tracking
+;####################
+sub Display_M_Tracking
+   menu Clear
+   menu Window Title XIIxOveR's Mining For Dummies
+   menu Window Color Gray
+   menu Window Size 391 300
+   menu Font Transparent #true
+   menu Font Align Right
+   menu Shape M_TrackingBorder 8 24 377 273 4 7 3 Maroon 7 Gray
+   menu Font Name Comic Sans MS
+   menu Font Size 10
+   menu Font Style bi
+   menu Font Color Black
+   menu Font Transparent #false
+   menu Font Align Center
+   menu Font BGColor Gray
+   menu Text Title 45 0 XIIxMining Resource Tracking System
+   menu Font Name MS Sans Serif
+   menu Font Size 8
+   menu Font Style b
+   menu Text IronCnt 28 48 Iron:
+   menu Text DullCnt 28 72 Dull:
+   menu Text ShadCnt 28 96 Shad:
+   menu Text CoppCnt 28 120 Copp:
+   menu Text BronCnt 28 144 Bron:
+   menu Text GoldCnt 28 168 Gold:
+   menu Text AgapCnt 28 192 Agap:
+   menu Text VariCnt 28 216 Veri:
+   menu Text ValoCnt 28 240 Valo:
+   menu Text EcruCnt 120 48 Ecru:
+   menu Text FireCnt 120 72 Fire:
+   menu Text TurqCnt 120 96 Turq:
+   menu Text BlueCnt 120 120 Blue:
+   menu Text PerfCnt 120 144 Perf:
+   menu Text DarkCnt 120 168 Dark:
+   menu Text BlacCnt 120 192 Blac:
+   menu Text CrysCnt 120 216 Crys:
+   menu Text SandCnt 120 240 Sand:
+   menu Text DiamCnt 212 48 Diam:
+   menu Text RubyCnt 212 72 Ruby:
+   menu Text StarCnt 212 96 Star:
+   menu Text SappCnt 212 120 Sapp:
+   menu Text CitrCnt 212 144 Citr:
+   menu Text AmbeCnt 212 192 Ambe:
+   menu Text TourCnt 212 216 Tour:
+   menu Text AmetCnt 212 240 Amet:
+   menu Text EmerCnt 212 168 Emer:
+   menu Text NormStnCnt 304 48 Norm:
+   menu Text DullStnCnt 304 72 Dull:
+   menu Text ShadStnCnt 304 96 Shad:
+   menu Text CoppStnCnt 304 120 Copp:
+   menu Text BronStnCnt 304 144 Bron:
+   menu Text GoldStnCnt 304 168 Gold:
+   menu Text AgapStnCnt 304 192 Agap:
+   menu Text VeriStnCnt 304 216 Veri:
+   menu Text ValoStnCnt 304 240 Valo:
+   menu Font Style 
+   menu Text IronCntVal 70 48 %IronCnt
+   menu Text DullCntVal 70 72 %DullCnt
+   menu Text ShadCntVal 70 96 %ShadCnt
+   menu Text CoppCntVal 70 120 %CoppCnt
+   menu Text BronCntVal 70 144 %BronCnt
+   menu Text GoldCntVal 70 168 %GoldCnt
+   menu Text AgapCntVal 70 192 %AgapCnt
+   menu Text VeriCntVal 70 216 %VeriCnt
+   menu Text ValoCntVal 70 240 %ValoCnt
+   menu Text EcruCntVal 160 48 %EcruCnt
+   menu Text FireCntVal 160 72 %FireCnt
+   menu Text TurqCntVal 160 96 %TurqCnt
+   menu Text BlueCntVal 160 120 %BlueCnt
+   menu Text PerfCntVal 160 144 %PerfCnt
+   menu Text DarkCntVal 160 168 %DarkCnt
+   menu Text BlacCntVal 160 192 %BlacCnt
+   menu Text CrysCntVal 160 216 %CrysCnt
+   menu Text SandCntVal 160 240 %SandCnt
+   menu Text DiamCntVal 254 48 %DiamCnt
+   menu Text RubyCntVal 254 72 %RubyCnt
+   menu Text StarCntVal 254 96 %StarCnt
+   menu Text SappCntVal 254 120 %SappCnt
+   menu Text CitrCntVal 254 144 %CitrCnt
+   menu Text AmbeCntVal 254 192 %AmbeCnt
+   menu Text TourCntVal 254 216 %TourCnt
+   menu Text AmetCntVal 254 240 %AmetCnt
+   menu Text EmerCntVal 254 168 %EmerCnt
+   menu Text NormStnCntVal 343 48 %NormStnCnt
+   menu Text DullStnCntVal 343 72 %DullStnCnt
+   menu Text ShadStnCntVal 343 96 %ShadStnCnt
+   menu Text CoppStnCntVal 343 120 %CoppStnCnt
+   menu Text BronStnCntVal 343 144 %BronStnCnt
+   menu Text GoldStnCntVal 343 168 %GoldStnCnt
+   menu Text AgapStnCntVal 343 192 %AgapStnCnt
+   menu Text VeriStnCntVal 343 216 %VeriStnCnt
+   menu Text ValoStnCntVal 343 240 %ValoStnCnt
+   menu Font Size 10
+   menu Font Style bi
+   menu Font Align Left
+   menu Text Ingots 24 260 Ingots
+   menu Text Stone 304 260 Stone
+   menu Font Style
+   menu Font Color WindowText
+   menu Font BGColor BtnFace
+   menu Font Size 8
+   if %1 = Reset
+      menu Button M_TrackingPause 105 265 60 25 Pause
+   else
+      menu Button M_TrackingStart 105 265 60 25 Start
+   menu Button M_TrackingReset 225 265 60 25 Reset
+   menu Shape EUOShape2 20 256 57 4 3 7 1 Black 7 Maroon
+   menu Shape EUOShape3 300 256 57 4 3 7 1 Black 7 Maroon
+	 menu Show
+return

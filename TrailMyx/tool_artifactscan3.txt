@@ -1,0 +1,241 @@
+;=================================================================
+; Script Name: TrailMyx's Artifact Monitor
+; Author: TrailMyx
+; Version: 1.10
+; Shard OSI / FS: OSI / FS OK
+; Revision Date: 9/29/2007
+; Purpose: Monitor the addition of special artifacts in your pack
+; Globals:
+; Special Thanks:
+;   C2, Toptwo
+;
+;=================================================================
+; Disclaimer:  By running this script, you are accepting the contents of this licence agreement.
+; This script is only authorized to be distributed on www.scriptuo.com.  If you purchase this script,
+; acquire it from another website, it is not considered an authorized copy and should be deleted
+; immediately.
+; You hold the author, TrailMyx, and the distribution site www.scriptuo.com not liable for any loss of
+; items, accounts, monitary or time losses associated with the use of this script.  Furthermore, you promise
+; not to distribute or sell this script to anyone without the express permission of the author, Trailmyx.
+; Violation of the contents of this agreement will result in one of the following: litigation, www.scriptuo.com
+; account termination, discimination of bad karma for your next life, and most definitely causing a black mark
+; placed on your soul.
+;
+; I worked very hard to bring this script to you, so please use it responisibily and
+; respectfully.  If you have any questions, please reach me at trailmyx@yahoo.com.
+; (c) 2007 TrailMyx, All rights reserved.
+;
+; Thanks to quickd and Khameleon for the spellweaving scroll suggestion and info!
+; Thanks again to Khameleon for all the good suggestions!
+;===================================================================
+set %version 1.1
+gosub showEUOMenu1
+gosub TM_AdvJournalSync artiscan 100
+gosub OpenBackPack
+finditem * C_ , #BACKPACKID
+if #FINDCNT > 0
+{
+  for #FINDINDEX 1 #FINDCNT
+    ignoreitem #FINDID
+}
+set %artifact_count 0
+set %program_start_time #SCNT
+set %last_artifact_time %program_start_time
+set %average_artifact_time 0
+set %ignored_items POF_
+repeat
+  gosub TM_AdvJournalScan artiscan VALID_ADVANCE a_special_artifact
+  if #RESULT = #TRUE
+  {
+    sound
+    finditem * C_ , #BACKPACKID
+    if #FINDCNT > 0
+    {
+      for #FINDINDEX 1 #FINDCNT
+      {
+        if #FINDTYPE notin %ignored_items
+        {
+          set %current_artifact_time #SCNT - %last_artifact_time
+          gosub ConvertTime %current_artifact_time
+          set %time #RESULT
+          menu set EUOEditLastTime %time
+          event property #FINDID
+          str pos #PROPERTY $
+          set #STRRES #STRRES - 1
+          str left #PROPERTY #STRRES
+          gosub AddSpace #STRRES
+          menu list add EUOListBox1 #RESULT , #SPC , --> , #SPC , %time
+          set %artifact_count %artifact_count + 1
+          menu set EUOEditCount %artifact_count
+          set %average_artifact_time %average_artifact_time + %current_artifact_time
+          set %last_artifact_time #SCNT
+          set %text %average_artifact_time / %artifact_count
+          gosub ConvertTime %text
+          menu set EUOEditAverageTime #RESULT
+          ignoreitem #FINDID
+        }
+      }
+    }
+  }
+until #FALSE
+stop
+;-------------------------------------------------------------------------------
+sub ConvertTime
+  namespace push
+  namespace local ct
+  set !time_min %1 / 60
+  set !time_sec %1 % 60
+  if !time_sec < 10
+    set !time_sec 0 , !time_sec
+  set #RESULT !time_min , : , !time_sec
+  namespace pop
+return #RESULT
+;-------------------------------------------------------------------------------
+; %1 = OpenBackPack
+sub OpenBackPack
+  event macro 8 7 ; open backpack
+  gosub GumpWait container_gump NULL
+  contpos 804 325
+return
+;-------------------------------------------------------------------------------
+sub GumpWait
+  wait 10
+  set %timedelay #SCNT
+loopwait1:
+  if #CONTNAME = %1 || #CONTNAME = %2
+    return
+  if #SCNT > %timedelay + 7
+    return
+  goto loopwait1
+return
+;-------------------------------------------------------------------------------
+; %1 - string to mung
+sub AddSpace
+  namespace push
+  namespace local AS
+  set !tempstring %1
+AddSpace_loop1:
+  str pos !tempstring _
+  if #STRRES <> 0
+  {
+    set !val #STRRES - 1
+    str left !tempstring !val
+    set !left #STRRES
+    set !val !val + 1
+    str del !tempstring 1 !val
+    set !tempstring !left , #SPC , #STRRES
+    goto AddSpace_loop1
+  }
+  set #RESULT !tempstring
+  namespace pop
+return #RESULT
+;-------------------------------------------------------------------------------
+; %1 - Journal Name
+; %2 - #LPC setting
+; Brings !_jindex up to the most recent #journal entry
+sub TM_AdvJournalSync
+  namespace push
+  namespace local TM_AdvJS_ , %1
+  set !_jindex #jindex + 1
+  if %0 > 1
+    set !lpc_set %2
+  namespace pop
+return
+;-------------------------------------------------------------------------------
+; %1 - Journal Name
+; %2 - ADVANCE , ( _VALID ) - advances jindex pointer, anything else
+; %3, %4, %5, etc strings to match
+; returns #TRUE for match, #FALSE for no match
+;  Will not advance !_jindex pointer to allow for scanning journal history for more than one search.
+;  Also searches for : , #SPC in journal entry to be sure someone isn't spamming the text
+sub TM_AdvJournalScan
+  namespace push
+  namespace local TM_AdvJS_ , %1
+  set !args %2
+  set !temp_lpc #LPC
+  if !lpc_set = N/A
+    set #LPC 1000
+  else
+    set #LPC !lpc_set
+  set !num_args %0
+  set !first_arg 3
+  if !_jindex = N/A
+    set !_jindex #jindex
+  if !charname = N/A
+  {
+    set !charname #CHARNAME
+    AdvJournalScan_loop1:
+      str pos !charname #SPC
+      if #STRRES <> 0
+      {
+        set !val #STRRES - 1
+        str left !charname !val
+        set !left #STRRES
+        set !val !val + 1
+        str del !charname 1 !val
+        set !charname !left , _ , #STRRES
+        goto AdvJournalScan_loop1
+      }
+  }
+  set !index !first_arg
+  repeat
+    set !temp_jindex !_jindex
+    set !text % . !index
+    while !temp_jindex <= #jindex
+    {
+      scanjournal !temp_jindex
+      str pos #JOURNAL !charname 1
+      set !namepos #STRRES
+      str count #JOURNAL !charname
+      set !namecnt #STRRES
+      str pos #JOURNAL :_ 1
+      set !smcpos #STRRES
+      str pos #JOURNAL !text 1
+      set !textpos #STRRES
+      if !textpos < !smcpos && !smcpos <> 0 || !smcpos = 1 || :_ notin #JOURNAL || VALID notin !args
+        set !pass #TRUE
+      else
+        set !pass #FALSE
+      if ( !text in #journal && ( ( !namepos = 1 && !namecnt <= 1 ) || !pass ) )
+      {
+        set !temp_jindex !temp_jindex + 1
+        if ADVANCE in !args
+          set !_jindex !temp_jindex
+        set #LPC !temp_lpc
+        namespace pop
+        return #TRUE
+      }
+      set !temp_jindex !temp_jindex + 1
+    }
+    set !index !index + 1
+  until !index - !first_arg > !num_args - !first_arg
+  set #LPC !temp_lpc
+  namespace pop
+return #FALSE
+;--------- EasyUO Menu Designer Code Begin ---------
+sub showEUOMenu1
+	menu Clear
+	menu Window Title TrailMyx's Artifact Monitor
+	menu Window Color BtnFace
+	menu Window Size 344 188
+	menu Font Transparent #true
+	menu Font Align Right
+	menu Font Name MS Sans Serif
+	menu Font Size 8
+	menu Font Style 
+	menu Font Color WindowText
+	menu Font Transparent #false
+	menu Font Align Left
+	menu Text EUOLabel1 48 8 New Artifacts
+	menu Text EUOLabel2 172 8 Last Time
+	menu Text EUOLabel3 280 8 Avg Time
+	menu Font BGColor Window
+	menu List Create EUOListBox1 4 28 329 153
+	menu Edit EUOEditCount 4 4 37 0
+	menu Edit EUOEditLastTime 128 4 37 0
+	menu Edit EUOEditAverageTime 240 4 37 0
+	menu Show 421 270
+return
+;--------- EasyUO Menu Designer Code End ---------
+
+

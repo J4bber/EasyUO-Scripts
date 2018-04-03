@@ -1,0 +1,565 @@
+;-----------------------------------------------------------
+; Script Name: CEOTurboCutter
+; Author: CEO
+; Version: 2.0
+; Client Tested with: 4.0..10b
+; EUO version tested with: 1_42_00A5 
+; Shard OSI / FS: OSI 
+; Revision Date:  043005
+; Public Release: 012704 
+; Purpose: This script goes along with CEOTurboTailor. It gets ran FIRST.
+;-------------------------------------------------------------
+;-------------------------------------------------------------
+; Instructions:
+;
+; 1. Start CEOTurboCutter
+; 2. See CEOTurboTailor for additional instructions. 
+;	This script is USELESS by itself!
+initevents
+set %version 2.0
+;=============================================
+; User configuration section
+
+; Most of these defaults should be fine. Please understand 
+; what you're doing before changing.
+;=============================================
+; If you are getting alot of "You must wait" message while running, increase this number.
+; You don't need to increase till all the messages goway, just enough so that it doesn't
+; fail so much that it loses tra
+set %cuttingdelay 5
+; Set these to your x/y cords for the EasyUO menu window
+set %menu_windowx 350
+set %menu_windowy 20
+;
+; Advanced user configs. === Only change if you understand EasyUO!!!!!
+;
+; If you have execute enabled modify this to the path of
+; EasyUO and you can start CEOTurboTailor automatically. 
+set %easyuopath C:\easyuo\easyuo.exe
+; The filename you called CEOTurboTailor. Default should work. If it needs to be a full
+; path, adjust to your needs.
+set %CEOTurboTailor CEOTurboTailor.txt
+;
+; if you set this to #true and you have exec enabled (assumes you know what you're doing
+; above), CEOTurboTailor will start automatically.
+set %autostart #false
+;
+set %gvar CEOTurboTailor
+set %scriptname CEOTurbocutter
+;=============================================
+; NOTHING BELOW THIS LINE SHOULD NEED CHANGING.
+; DO SO AT YOUR OWN RISK!
+;=============================================
+set %debug #false
+set %520 520_ , #charid
+set %521 521_ , #charid
+set %522 522_ , #charid
+set %uncuttables PPH_WPH_BQH_QPH_AQH_VPH_YPH_ZPH_CQH_XPH
+set %scissortypes KAG_JAG
+set %backpackid #backpackid
+set %backpacktype ZJF_KUD
+set %backpackcount 0
+set %wait1 20
+set %sp #false
+if Siege in #shard
+	set %sp #true
+set * . %520 N/A
+set * . %521 IDLE
+gosub initmenu
+gosub GetScissors
+if ! #result
+{
+	menu hideeuo
+	display ok No scissors were found. You need one pair of scissors in the main backpack.$$Script halted.
+	menu hide
+	halt
+}
+gosub GetBackPackID
+set %idledcount 0
+if %autostart && EXEC in #opts
+	gosub start
+gosub SetupScreen
+gosub initmenu
+set %lasttype * . %521
+set #menubutton N/A
+Cutter:
+if %sp
+	gosub GetScissors
+if * . %520 = done
+	gosub done
+if * . %520 = terminate
+	gosub terminator
+if #menubutton = CLOSED
+{
+	menu hide
+	halt
+}
+if * . %521 in %uncuttables
+{
+	menu font color yellow
+	set * . %522 IDLE
+	menu delete d522
+	menu text d522 55 10 * . %522
+	menu delete d521
+	menu text d521 55 25  None
+	menu font color lime
+	wait 2s
+	gosub Pause
+	goto cutter
+}
+set %Cuttercount 0
+Cutter2:
+finditem * . %521  C_ , %backpackid
+if #findkind <> -1
+{
+	set %cutid #findid
+	set %cuttercount %cuttercount + 1
+	if %cuttercount = 1
+	{
+		menu font color lime
+		set * . %522 CUTTING
+		menu delete d522
+		menu text d522 55 10 * . %522
+		goto Cutter3
+	}
+	if %cuttercount < 4
+	{
+		menu font color blue
+		set * . %522 CUTTING
+		menu delete d522
+		menu text d522 55 10 * . %522
+		goto Cutter3
+	}
+	if %cuttercount < 8
+	{
+		menu font color yellow
+		set * . %522 CUTTING-
+		menu delete d522
+		menu text d522 55 10 * . %522
+		goto Cutter3
+	}
+	if %cuttercount < 15
+	{
+		menu font color red
+		set * . %522 CUTTING--
+		menu delete d522
+		menu text d522 55 10 * . %522
+		goto Cutter3
+	}
+	menu font bgcolor red
+	menu font color black
+	set * . %522 CUTTING---
+	menu delete d522
+	menu text d522 55 10 * . %522
+	menu font bgcolor black
+Cutter3:
+ 	SET #LTARGETID #findid
+	set #lTargetKind 1
+	if %sp
+		gosub GetScissors
+   	SET #LOBJECTID %scissorid
+   	wait %cuttingdelay
+   	EVENT MACRO 17 0
+   	TARGET 3s
+   	EVENT MACRO 22
+	wait %cuttingdelay
+	set %idlecount 0
+	if Scissors_cannot in #sysmsg
+	{
+		set %uncuttables %uncuttables , _ , * . %521
+		ignoreitem %cutid
+		goto cutter
+	}
+	if MUST_WAIT in #sysmsg && %cuttingdelay < 20
+	{
+		set %cuttingdelay %cuttingdelay + 1
+		wait %cuttingdelay
+		menu font color yellow
+		menu delete cutinfo
+		menu text cutinfo 5 55 (Delay= , %cuttingdelay , )
+		goto cutter2
+	}
+	ignoreitem %cutid cutlist
+	goto Cutter2
+
+}
+set %idlecount %idlecount + 1
+if %idlecount > 3
+{
+	menu font color yellow
+	set * . %522 IDLE
+	menu delete d522
+	menu text d522 55 10 * . %522
+	ignoreitem reset cutlist
+}
+if %lasttype <> * . %521
+{
+	set %lasttype * . %521
+	menu font color white
+	menu delete d521
+	menu text d521 55 25 * . %521
+}
+wait %wait1
+if %idlecount > 1
+	gosub Pause
+goto Cutter
+
+
+sub Pause
+if * . %520 <> PAUSE
+	return
+menu font color yellow
+menu delete d520
+menu text d520 55 40 * . %520
+set * . %522 PAUSED
+menu delete d522
+menu text d522 55 10 * . %522
+PauseLoop:
+wait 5
+if * . %520 = PAUSE
+	goto PauseLoop
+menu delete d520
+menu text d520 55 40 * . %520
+return
+
+sub initmenu
+menu clear
+menu window size 180 70
+menu window title CEOTurboCut , %version
+menu window color black
+menu font color white
+menu font bgcolor black
+menu font size 9
+menu font style n
+menu text h1 5 10 Status:
+menu text d522 55 10 * . %522
+menu text h2 5 25 Type:
+menu text d521 55 25 * . %521
+menu text h3 5 40 Control:
+menu font color lime
+menu text d520 55 40 * . %520
+menu show %menu_windowx %menu_windowy
+menu hideeuo
+menu show %menu_windowx %menu_windowy
+menu font size 9
+menu font color lime
+return
+
+sub GetScissors
+set %backpackopened #false
+GS1:
+finditem %scissortypes C_ , #backpackid
+if #findkind <> -1
+{
+	set %scissorid #findid
+	return #true
+}
+if ! %backpackopened
+{
+	event macro 8 7
+	wait 1s
+	set %backpackopened #true
+	goto GS1
+}
+;set * . %520 HALTED
+set * . %521 NO , #spc , SCISSORS!
+set * . %522 ERROR
+set * . %520 terminate
+menu delete d522
+menu delete d521
+menu delete d520
+menu font color red
+menu text d522 55 10 * . %522
+menu text d521 55 25 * . %521
+menu text d520 55 40 * . %520
+display ok You need at least one pair of scissors in your char's main opened backpack! Halting...
+halt
+;---------------------
+
+
+sub SetupScreen
+menu clear
+menu window size 365 295
+menu window title CEOTurboCut , %version
+menu window color gray
+menu font color blue
+menu font bgcolor gray
+menu font size 12
+menu font style ub
+menu text h1 110 5 Setup Instructions
+menu font style b
+menu font color yellow
+menu font size 9
+menu text h1 5 40 1. Backpack setup:
+menu text h1 5 150 2. Resource Container:
+menu font bgcolor red
+menu font color black
+menu text h1 8 165 (Resource container
+menu text h1 8 180 must be in bank box
+menu text h1 8 195 or house secure.)
+menu font bgcolor gray
+menu font color lime
+menu text h1 125 40 ONE pair Scissors (REQUIRED)
+menu font style n
+menu font color white
+menu text h1 125 55 Sewing Kit
+menu text h1 125 70 Resources (cloth or leather)
+menu font color blue
+menu text h1 5 85 Backpack must be OPENED. You can start with just scissors
+menu text h1 5 100 as long as the sewing kits (or Tinker's tools) and resources
+menu text h1 5 115 needed to make items at your skill level are in the resource
+menu text h1 5 130 container.
+menu font color white
+menu text h1 140 150 Cloth, Leather, and Bone (if needed)
+menu text h1 140 165 Sewing Kits (or Tinker's Tools)
+menu text h1 140 180 Tinker's Tools
+menu text h1 140 195 Ingots (If Tinkering)
+menu font color blue
+menu text h1 5 210 You can actually put any of these items in any opened container.
+menu text h1 5 225 The resource container AND your paperdoll must not be blocked!
+menu text h1 5 240 Bandaids and other items will be returned to resource container
+menu text h1 5 255 as needed.
+menu font bgcolor red
+menu font color black
+menu font style b
+menu text h1 75 255 Cloth MUST be all same color (stackable).
+menu font bgcolor gray
+menu font style n
+menu font color yellow
+set %setupx #clixres / 2 - ( 365 / 2 )
+set %setupy #cliyres / 2 - ( 295 / 2 )
+menu show %setupx %setupy
+set * . %522 PAUSED
+if EXEC in #opts
+{
+	menu font bgcolor teal
+	menu font color black
+	menu button Start  320 275 40 20 Start
+	menu font bgcolor black
+	menu font color yellow
+}
+set #menubutton N/A
+WaitforCut:
+if #menubutton = start
+	gosub start
+menu font bgcolor red
+menu text h1 110 280 Start CEOTurboTailor now.
+wait 5
+menu font bgcolor gray
+menu text h1 110 280 Start CEOTurboTailor now.
+wait 5
+if * . %520 <> CUT
+	goto waitforCut
+return
+
+sub start
+ execute %easyuopath %CEOTurboTailor
+set #menubutton N/A
+menu delete start
+return
+
+sub done
+set #menubutton N/A
+chooseskill tail
+set * . %522 PAUSED
+menu clear
+menu font size 9
+menu window size 300 295
+menu window title CEOTurboCut , %version
+menu window color black
+menu font color lime
+menu font bgcolor black
+menu font style b
+menu text h1 5 5 Congratulations! You've reached your skillcap.
+menu font style ni
+menu font color white
+menu text h1 5 30 Now that CEOTurboTailor has done its job can
+menu text h1 5 45 I ask a small favor of you?
+menu font style n
+menu font color yellow
+menu text h1 5 70 I spent several hours of my time creating this
+menu text h1 5 85 script. Can you please spend a few minutes and
+menu text h1 5 100 visit the EasyUO website and drop me a message?
+menu text h1 5 115 You may need to register, but it'll only take a few
+menu text h1 5 130 moments.
+menu text h1 5 150 I'd also appreciate it if you could post your stats
+menu text h1 5 165 and rate the script. Doing so will bring me much
+menu text h1 5 180 joy and will encourage more scripts like this one. :-)
+menu font size 12
+menu font color white
+menu font style b
+menu text h1 105 200 Thank You!
+menu font style n
+menu font size 9
+if exec in #opts
+	menu button easyuo 10 200 90 20 Rate it now!
+;set %setupx #clixres / 2 - ( 300 / 2 )
+;set %setupy #cliyres / 2 - ( 295 / 2 )
+menu show 230 20
+menu font color red
+menu font style u
+menu text h1 45 225 Skill Start
+menu text h1 125 225 Skillcap
+menu text h1 190 225 Elasped Time
+menu text h1 125 255 Cloth
+menu text h1 185 255 Leather
+menu text h1 255 255 Bone
+menu font style n
+menu text h1 45 255 Resources:
+menu text h1 5 270 Attempts:
+menu font color lime
+menu font align right
+gosub getGlobalVar %gvar CEOTurboTailor #charid skillstart
+menu text h1 93 240 %skillstart
+menu text h1 165 240 #skill
+gosub getGlobalVar %gvar CEOTurboTailor #charid scripttime
+set %totaletime %scripttime
+set %ehours %totaletime / 3600
+set %emins  ( %totaletime / 60 ) - ( %ehours * 60 )
+set %esecs %totaletime % 60
+menu text h1 265 240 %ehours , h , #spc , %emins , m , #spc , %esecs , s
+menu font color white
+menu font align left
+gosub getGlobalVar %gvar CEOTurboTailor #charid attempts3
+gosub getGlobalVar %gvar CEOTurboTailor #charid clothused3
+gosub getGlobalVar %gvar CEOTurboTailor #charid leatherused3
+gosub getGlobalVar %gvar CEOTurboTailor #charid boneused3
+menu text h1 60 270 %attempts3
+menu font align right
+menu text h1 153 270 %clothused3
+menu text h1 225 270 %leatherused3
+menu text h1 282 270 %boneused3
+menu font align left
+set #menubutton N/A
+done1:
+wait 5
+if * . %520 = terminate
+	set #menubutton terminate
+if #menubutton = N/A
+	goto done1
+if #menubutton = easyuo
+{
+	gosub runbrowser
+	set #menubutton N/A
+	goto done1
+}
+gosub terminator
+return
+
+sub terminator
+if %debug
+	halt
+set * . %520 terminate
+terminate euo
+return
+
+sub runbrowser
+execute http://www.easyuo.com/forum/viewtopic.php?t=3878
+return
+
+sub displaydiagnostics
+display ok %1 , #spc ,  %2  $ %3 , #spc ,  %4  $ %5 , #spc , %6
+return
+
+==================================
+; Script Name:  CEO's * variable management subs (pseudo filesystem)
+; Author: CEO
+; Version: 1.1
+; Client Tested with: 4.0.1b
+; EUO version tested with: 1_41_103
+; Shard OSI / FS: OSI
+; Revision Date: 040219
+; Public Release: 040219
+; Globals Used: User specified (2 total)
+; Purpose: Allows you to use a * variable as a pseudo-filesystem
+;=======================================
+; CEO's global variable management subs:
+;      getGlobalVar  . putGlobalVar  . delGlobalVar
+;=======================================
+;
+;ver 1.1
+;changed the lock file to use *variablename_lock so it'll work with any named *variable
+;
+Sub getGlobalVar
+
+;ver 1.0 posted 19Feb04 by CEO
+;purpose: Allows you to store multiple variables in one global variable unique to
+;             each player and script. getGlobaVar retrieves a value from a global variable.
+;@returns: #result = #false if variable not found, #true if found
+;            % . %3 contains variable value
+;%1 is the global/persistant variable to use ( %1 + 1 is used for locking)
+;%2 is the script identifer or pseudo filename
+;%3 is #charid or pseudo filename
+;%4 is the variable to search for and return in %. %3
+;%5 is for lock control. By default getGlobalVar uses a lock to return a value. In some cases you may want to
+;       retrieve a variable (mostly for speed) without needing a lock as long as you are aware of
+      any potentional conflicts, that very rarely may occur. Set this param to NOLOCK to access
+      global storage without a lock.
+;sample usage:
+;               gosub getGlobalVar 50 MyScript #charid backpackid
+; Using global var *50 finds the variable labeled MyScript#charidbackpackid and returns it in %backpackid
+;
+;               gosub getGlobalVar 50 MyScript #charid clothstat NOLOCK
+; Using global var *50 find the variable labeled MyScript#charidclothstat and returns it in %clothstat without using a lock
+; Warning: do not use *1000. * %1 + 1 is used for locking and there is no *1001!
+nameSpace push
+nameSpace local #systime , _ , %2 , _ , %3 , _ , %4 , _ , GET
+set !lpc #lpc
+set #lpc 1000
+set !lock %1 , _lock
+if ( %0 = 5 ) && ( %5 = NOLOCK )
+   goto getGlobalVar_skiplock
+set !lockcount 0
+getGlobalVar_waitforlock:
+if * . !lock <> N/A && * . !lock <> #nsname
+{
+   wait 1 4
+   set !lockcount !lockcount + 1
+   if !lockcount < 10
+      goto getGlobalVar_waitforlock
+   if * . !lock <> N/A
+   {
+      set !currentlock * . !lock
+      if !currentlock = N/A
+         goto getGlobalVar_waitforlock
+      str pos !currentlock _
+      set !strres #strres - 1
+      str left !currentlock !strres
+      set !systime #systime - #strres
+      if !systime < 10000 ; if over 10 seconds assume a broken lock and take it
+      {
+         set !lockcount 0
+         goto getGlobalVar_waitforlock
+      }
+   }
+}
+set * . !lock #nsname
+wait 3 2
+if  * . !lock <> #nsname
+{
+   set !lockcount 0
+   goto getGlobalVar_waitforlock
+}
+getGlobalVar_skiplock:
+set !global * . %1
+set !varName %2 , ^ , %3 , ^ , %4 , |
+str pos !global !varName
+set #result #strres <> 0
+if #result
+{
+   set !varNamePos #strres
+   str len !varName
+   set !delString !varNamePos + #strres - 1
+   str del !global 1 !delString
+   set !global #strres
+   str pos !global |
+   set !varNamePos #strres - 1
+   str left !global !varNamePos
+   set % . %4 #strres
+}
+if ( %0 < 5 || %5 <> NOLOCK ) && * . !lock = #nsname
+   set * . !lock N/A
+set #lpc !lpc
+nameSpace Clear
+nameSpace Pop
+return #result

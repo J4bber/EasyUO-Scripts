@@ -1,0 +1,170 @@
+    ;=================================================================================================
+    ; Script Name: J4bber's Begging Trainer
+    ; Author: J4bber (scriptfellow)
+    ; Version: 1.0
+    ; Client Tested with: 5.0.2f
+    ; EUO version tested with: 1.5v81
+    ; Shard OSI / FS: OSI
+    ; Revision Date: 2006/07/19
+    ; Public Release: 2006/07/19
+    ; Purpose: Training begging.  Can train with invunerables only or anyone
+    ; Special Thanks: scriptfellow for his original script that this one was based from.
+    ;
+    ;==================================================================================================
+    ; Revision History:
+    ;
+    ; v1.0 - Initial Release
+    ;==================================================================================================
+    ;Debug?
+    set *debug #false
+    set %type 1 ;1 - any blue, 7-invunerables
+    set %shortwait 5s
+    set %medwait 10s
+    set %player perhaps_asking_would_work_better
+    set %littlechance there_is_little_chance
+    set %success i_feel_sorry_for_thee
+    set %tofar you_are_too_far_away_to_beg
+    set %repeats 5 ; Number of times in a row to ask before moving on.
+     
+    ignoreitem #CHARID
+    ;Main
+    find:
+    if *debug
+      event exmsg #charid 3 0 Searching
+    set %repeatnum 1
+    finditem HS_IS G_7
+    if #FINDID = #CHARID
+    {
+            if *debug
+        event exmsg #findid 3 0 Haha
+      ignoreitem #FINDID
+      goto find
+    }
+     
+    if #FINDKIND = -1
+    {
+            if *debug
+        event exmsg #charid 3 0 Resetting
+      ignoreitem reset
+      ignoreitem #CHARID
+      wait 60s
+      goto find
+    }
+     
+    if *debug
+      event exmsg #findid 3 0 PICK ME
+     
+    begforstuff:
+    if *debug
+      event exmsg #charid 3 0 Begging
+    set %jstart #jindex
+    finditem #FINDID
+    move #FINDX #FINDY 1 3s
+     
+     
+    if #findrep <> %type
+    {
+            if *debug
+        event exmsg #findid 3 0 Not correct type
+      ignoreitem #FINDID
+      goto find
+    }
+     
+    if #FINDDIST > 10
+    {
+            if *debug
+        event exmsg #findid 3 0 Too Far
+      ignoreitem #FINDID
+      goto find
+    }
+    finditem #FINDID
+    move #FINDX #FINDY 1 3s
+    chooseskill BEGGING
+    set %oldskill #SKILL
+    set #LTARGETID #FINDID
+    set #LTARGETKIND 1
+     
+    event macro 13 6
+    target
+    event macro 22
+     
+    wait %medwait
+    if *debug
+        event exmsg #charid 3 0 TooFar
+    gosub checkjournal %tofar
+    if #result
+    {
+            if *debug
+        event exmsg #findid 3 0 To Far
+            ignoreitem #findid
+            goto find
+    }
+    if *debug
+        event exmsg #charid 3 0 Little Chance
+    gosub checkjournal %littlechance
+    if #result
+    {
+            if *debug
+        event exmsg #findid 3 0 Little Chance
+            ignoreitem #findid
+            goto find
+    }
+            if *debug
+        event exmsg #charid 3 0 Player
+    gosub checkjournal %player
+    if #result
+    {
+            if *debug
+        event exmsg #findid 3 0 Player Ignored
+            ignoreitem #findid
+            goto find
+    }
+            if *debug
+        event exmsg #charid 3 0 success
+    gosub checkjournal %success
+    if #result
+    {
+      if *debug
+        event exmsg #findid 3 0 Success_Ignoring
+      ignoreitem #FINDID
+      goto find
+    }
+     
+            if *debug
+        event exmsg #charid 3 0 repeats
+    if %repeatnum >= %repeats
+    {
+      if *debug
+        event exmsg #findid 3 0 Stop bugging me
+            ignoreitem #findid
+            goto find
+    }
+     
+    set %jstart %jlast
+    finditem #FINDID
+    set %repeatnum %repeatnum + 1
+    goto begforstuff
+     
+     
+    ;==================================================================================================
+    ; checkjournal: checks journal for specific message
+    ;==================================================================================================
+    sub checkjournal
+            if *debug
+        event exmsg #charid 3 0 Sub checkjournal
+     
+      set %jlast #Jindex + 1
+      for %dummy %jstart #JIndex
+      {
+        scanjournal %dummy
+        if %1 in #journal
+          {
+            set %jstart %dummy
+            return #true
+          }
+      }
+    return #false
+
+
+
+Report private message

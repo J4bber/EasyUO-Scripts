@@ -1,0 +1,494 @@
+    ;==================================
+    ; Script Name: CEOWoolandFeathers
+    ; Author: CEO
+    ; Version: 1.2
+    ; Client Tested with: 4.0.1b
+    ; EUO version tested with: 1.4 (0067)
+    ; Shard OSI / FS:
+    ; Revision Date: 02-3-04
+    ; Public Release: 02-3-04
+    ; Purpose:  Wool and Feathers, Wool and Feathers, Wool and Feathers  (sung to the tune of Silver and Gold).
+    ;=================================
+    initevents
+    set %version 1.2
+    ;=================================
+    ; Not much to change
+    ;
+    ; For debuging
+    set %debug #false
+    ; Add more types for your stuff if you want...
+    set %knifetypes CNF_BNF_GMH
+    ; set this to #false if you don't want t sheer nearby sheep
+    set %sheering #true
+    ; set to #true if you want to hide corpses
+    set %hidecorpses #false
+    ; set to #true if you have a slowconnection
+    set %slowconnection #false
+    ;=================================
+    gosub CheckEUOVersion 1 41 102 euomajor euominor euobuild
+    if ! #result
+    {
+            menu hideeuo
+            str del %euobuild 1 1
+            display ok Your Environment:$$EasyUO Version: %euomajor , #dot , %euominor , #spc , ( , build , #spc , #strres , )$
+    +Client: #CLIVER $$
+    +This script requires EasyUO version 1.41 (build 0066) or higher.$$
+    +Sorry you can not use it with this version. Halting.
+            menu hide
+            halt
+    }
+    set %scissortypes KAG_JAG
+    set %corspetype YFM
+    set %nakedsheeptypes FG
+    set %sheepwithwooltypes PF
+    set %sheeptypes %nakedsheeptypes , _ , %sheepwithwooltypes
+    set %feathertypes VLK
+    set %wooltypes HFG
+    set %purewooltypes OFF
+    set %resourcetype %wooltypes , _ , %feathertypes
+    set %tcorpses 0
+    if %slowconnection
+    {
+            set %wait1 20
+    }
+    else
+    {
+            set %wait1 10
+    }
+    gosub GetKnife
+    if ! #result
+    {
+            display ok You need a knife in your backpack for cutting$up corpses. Script Halted.
+            halt
+    }
+    gosub GetScissors
+    if ! #result
+    {
+            display ok You need scissors in your backpack for cutting$up hides and bones. Script Halted.
+            halt
+    }
+    gosub GetPaperdollxy
+    gosub StatusBarUp
+    linespercycle 40
+    gosub CountItems %purewooltypes
+    set %tpurewool #result
+    gosub CountItems %wooltypes
+    set %tcorpsewool #result
+    gosub CountItems %feathertypes
+    set %tfeathers #result
+    gosub initmenu
+    set #menubutton N/A
+    MainLoop:
+    wait %wait %wait1
+    if #menubutton = closed
+            gosub closed
+    menu delete status
+    if #maxweight - #weight < 8
+            menu text status 50 10 Waiting (Sheering off).
+    else
+            menu text status 50 10 Waiting.
+    wait 5
+    if #weight >= #maxweight - 5
+    {
+            display ok You are now overweight, the script will$not pick up anymore resources until you$empty your pack.
+            set %waitcount 0
+            menu delete status
+            menu text status 50 10 Paused, overweight.
+    waitforweight:
+            wait 20
+            if #weight >= #maxweight - 5
+            {
+                    set %waitcount 0
+                    goto waitforweight
+            }
+            set %waitcount %waitcount + 1
+            if %waitcount < 3
+                    goto waitforweight
+    }
+    set %temp1 ( %maxloaded - #weight ) / 5
+    finditem %corspetype , _ , %sheeptypes G_2
+    if #findkind = 1
+    {
+     
+    skip0:
+            menu delete status
+            menu text status 50 10 Sheep/Corpse found , #dot
+            set %tcorpses %tcorpses + 1
+            set %findid #findid
+            if #findtype in %sheepwithwooltypes && ( #maxweight - #weight >= 8 ) && %sheering
+            {
+                    gosub CountItems %purewooltypes
+                    set %temp #result
+                    gosub sheersheep %findid %knifeid
+                    if ! #result
+                            goto skip2
+                    wait 10
+                    gosub CountItems %purewooltypes
+                    set %temp #result - %temp
+                    set %tpurewool %tpurewool + %temp
+                    gosub UpdateStats
+                    ignoreitem %findid
+                    goto Mainloop
+            }
+            if #findtype in %sheeptypes
+            {
+                    menu delete status
+                    menu text status 50 10 Ignoring shorn sheep , #dot
+                    wait 10
+                    goto skip2
+            }
+            event property %findid
+            wait 10
+            set %corpse_property #property
+            gosub Corspecutter %findid %knifeid
+            if ! #result
+                    goto skip2
+    skip1:
+            gosub OpenCorpse %findid
+            if ! #result
+                    goto Skip2
+    lootagain:
+            finditem %resourcetype C_ , %instance_id
+            if #findkind <> -1
+            {
+                    set %resourceid #findid
+                    gosub DropOnBackpack %resourceid
+                    goto lootagain
+            }
+    skip2:
+            ignoreitem %findid
+            if %hidecorpses
+                    hideitem %findid
+            gosub UpdateStats
+    }
+    goto MainLoop
+    halt
+     
+    sub OpenCorpse
+    menu delete status
+    menu text status 50 10 Opening corpse.
+    set %retry 0
+    set %_corpse %1
+    OC1:
+    finditem %_corpse
+    if #findkind = -1
+            return #false
+    set #lobjectid #findid
+    set #nextcposx 400
+    set #nextcposy 600
+    gosub resetjournal
+    event macro 17
+    gosub GetInstanceID
+    if ! #result
+    {
+            set %retry %retry + 1
+            if %retry < 4
+                    goto OC1
+            return #false
+    }
+    set %lootable #true
+    gosub FindJournalMessage DID_NOT_EARN A_CRIMINAL YOU_CAN_NOT_LOOT
+    if #result
+            set %lootable #false
+    return %lootable
+     
+    sub GetInstanceID
+    ;pub 28 fix for instance corpses
+    set %ttw #scnt2 + 25
+    GIID1:
+    if #contname = container_gump && #contsize = 144_212
+    {
+            set %instance_id #contid
+            return #true
+    }
+    if #scnt2 < %ttw
+            goto GIID1
+    return #false
+     
+    sub sheersheep
+    menu delete status
+    menu text status 50 10 Sheering Sheep.
+    ; %1 = sheepid , %2 = knife
+    set #lobjectid %2
+    set #ltargetid %1
+    set #lTargetKind 1
+    gosub resetjournal
+    event macro 17 0
+    target 4s
+    event macro 22 0
+    wait %wait1 %wait1
+    gosub FindJournalMessage WOOL
+    return #result
+     
+     
+    sub CorspeCutter
+    menu delete status
+    menu text status 50 10 Cutting corpse.
+    ; %1 = corspeid , %2 = knife
+    set #lobjectid %2
+    set #ltargetid %1
+    set #lTargetKind 1
+    gosub resetjournal
+    event macro 17 0
+    target 4s
+    event macro 22 0
+    wait %wait1 %wait1
+    gosub FindJournalMessage WOOL FEATHERS
+    if #result
+            set %collecttype 1
+    return #result
+     
+    sub CountItems
+    ; %1 stackable item type
+    set %count 0
+    CI1:
+    finditem %1 C_ , %backpackid
+    if #findkind <> -1
+    {
+            set %count %count + #findstack
+            ignoreitem #findid woolcount
+            goto CI1
+    }
+    ignoreitem reset woolcount
+    return %count
+     
+    sub GetKnife
+    finditem %knifetypes C
+    if #findkind <> -1
+    {
+            set %knifeid #findid
+            return #true
+    }
+    return #false
+     
+    sub GetScissors
+    finditem %scissortypes C
+    if #findkind <> -1
+    {
+            set %scissorid #findid
+            set %backpackid #findbagid
+            return #true
+    }
+    return #false
+     
+    sub DropOnBackpack
+    menu delete status
+    menu text status 50 10 Getting resource.
+    %1 = id of item to get
+    set %_dropid %1
+    finditem %_dropid
+    if #findtype in %wooltypes
+    {
+            set %collecttype 2
+            set %maxhold ( #maxweight  - #weight - 5 ) / 4
+    }
+    if #findtype in %feathertypes
+    {
+            set %collecttype 1
+            set %maxhold ( #maxweight  - #weight - 5 ) * 10
+    }
+    set %findstack #findstack
+    set %max2get %findstack
+    set %maxhold2 #maxweight - #weight
+    if %max2get > %maxhold
+            set %max2get %maxhold
+    ;if %max2get > %maxhold2
+    ;       set %max2get %maxhold2
+    event drag %_dropid
+    wait %wait1
+    if %max2get = %findstack
+            msg $
+    else
+            msg %max2get $
+    wait %wait1
+    set %retry 0
+    DOB1:
+    click %backpackx %backpacky p
+    wait %wait1
+    if #lliftedkind = 1
+    {
+            set %retry %retry + 1
+            if %retry > 6
+            {
+                    display ok Can't drop on backpack.$Giving up. Script HALTED.
+                    halt
+            }
+            if %retry > 4
+            {
+                    display ok Problem dropping item on backpack.$Make sure the backpack on the Paperdoll$
+    +is not covered! You have 2 seconds after hitting ok to fix.
+                    wait 2s
+            }
+            gosub GetPaperDollXY
+            goto DOB1
+    }
+    if %collecttype = 1
+            set %tfeathers %tfeathers  + %max2get
+    if %collecttype = 2
+            set %tcorpsewool %tcorpsewool  + %max2get
+    return
+     
+    sub GetPaperDollXY
+    menu delete status
+    menu text status 50 10 Get Paperdoll Info
+    GPDXY1:
+    event macro 8 1
+    wait %wait1 %wait1
+    if #contname <> paperdoll_gump
+            goto GPDXY1
+    set %paperdollx #contposx
+    set %paperdolly #contposy
+    set %backpackx #contposx + 140
+    set %backpacky #contposy + 220
+    wait 5
+    wait %wait1 %wait1
+    return
+     
+    sub resetjournal
+    scanjournal 1
+    deletejournal
+    return
+     
+    sub FindJournalMessage
+    set %jc 1
+    FJM1:
+    scanjournal %jc
+    if #journal = N/A
+            return #false
+    for %_i 1 %0
+    {
+    if % . %_i in #journal
+            return #true
+    }
+    set %jc %jc + 1
+    goto FJM1
+     
+     
+    sub InitMenu
+    menu clear
+    menu window size 220 95
+    menu window title CEOWoolandFeathers %version
+    menu window color black
+    menu font bgcolor BLACK
+    menu font color red
+    menu show %menux %menuy
+    menu font size 9
+    menu text h1 5 10 Status:
+    menu text h1 5 25 Total Creatures
+    menu text h1 135 25 :
+    menu text h1 5 40 Feathers Collected
+    menu text h1 135 40 :
+    menu text h1 5 55 Pure Wool Collected
+    menu text h1 135 55 :
+    menu text h1 5 70 Corpse Wool Collected
+    menu text h1 135 70 :
+    gosub UpdateStats
+    if ! %debug
+            menu hideeuo
+    return
+     
+    sub UpdateStats
+    menu font color lime
+    menu font align right
+    menu delete d1
+    menu text d1 170 25 %tcorpses
+    menu delete d2
+    menu text d2 170 40 %tfeathers
+    menu delete d3
+    menu text d3 170 55 %tpurewool
+    menu delete d4
+    menu text d4 170 70 %tcorpsewool
+    menu font align left
+    return
+     
+    sub StatusBarUp
+    ;purpose - make sure the status bar is up on the char
+    IF #charname = N/A
+    {
+            Event Macro 8 2
+            wait %wait1
+    }
+    if #charname = N/A
+    {
+            display ok Status bar must be opened.
+            halt
+    }
+    return
+     
+    sub closed
+    if ! %debug
+            terminate euo
+    return
+     
+    sub CheckEUOVersion
+    ; the.wza's version check from the boards. Modified a little....
+       nameSpace push
+       nameSpace Local CheckEUOVersion
+       set !VerMajor %1
+       set !VerMinor %2
+       set !VerBuild %3
+            set !params %0
+       gosub _getStringBeforeUnderscore #euoVer
+       set !euoMajor #result
+       gosub _getStringBeforeUnderscore #strRes
+       set !euoMinor #result
+       set !euoBuild #strRes
+            if !params = 6
+            {
+                    set % . %4 !euoMajor
+                    set % . %5 !euoMinor
+                    gosub converthex !euobuild
+                    set % . %6 #result
+            }
+       set %0 !euoMajor > !VerMajor ||
+          + ( !euoMajor = !VerMajor && !euoMinor > !VerMinor ) ||
+          + ( !euoMajor = !VerMajor && !euoMinor = !VerMinor && !euoBuild >= !VerBuild )
+       nameSpace clear
+       nameSpace pop
+    return %0
+     
+    ; in : xxx_yyy
+    ; out : #result = xxx
+    ;       #strRes = yyy
+    sub _getStringBeforeUnderscore
+       str Pos %1 _
+       set !len #strRes - 1
+       str Left %1 !len
+       set %0 #strRes
+       set !len !len + 1
+       str Del %1 1 !len
+    return %0
+     
+    sub converthex
+    ; assumes the normal max of 4 hex digits in build format.
+    set %decimal %1
+    set %_h0 0
+    set %_h1 1
+    set %_h2 2
+    set %_h3 3
+    set %_h4 4
+    set %_h5 5
+    set %_h6 6
+    set %_h7 7
+    set %_h8 8
+    set %_h9 9
+    set %_h10 a
+    set %_h11 b
+    set %_h12 c
+    set %_h13 d
+    set %_h14 e
+    set %_h15 f
+    set %h1 %decimal / 4096
+    if %h1 <> 0
+            set %decimal %decimal - ( %h1 * 4096 )
+    set %h2 %decimal / 256
+    if %h2 <> 0
+            set %decimal %decimal - ( %h2 * 256 )
+    set %h3 %decimal / 16
+    if %h3 <> 0
+            set %decimal %decimal - ( %h3 * 16 )
+    set %h4 %decimal % 16
+    set %hex x , %_h . %h1 , %_h . %h2 , %_h . %h3 , %_h . %h4
+    return %hex
+
+

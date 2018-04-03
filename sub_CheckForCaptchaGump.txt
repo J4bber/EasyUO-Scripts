@@ -1,0 +1,10 @@
+; Check for Captcha Gump on freeshards and pause.
+;gosub CheckForCaptchaGump
+sub CheckForCaptchaGump
+   if #contName = generic_gump && #contsize = 199_132 2
+      {
+        display Script Paused For Captcha. To re-enable click ok and then click play on the EasyUO window.
+        pause
+      }
+return
+

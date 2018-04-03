@@ -1,0 +1,1034 @@
+;============================================
+; Script Name: Miffy's Item Finder v98
+; Author: Miffy
+; Version: 0.993
+; Client Tested with: 5.0.1h 60
+; EUO version tested with: 1.5 69
+; Shard OSI / FS:  FS (Alexandria) / OSI OK
+; Revision Date:  14-Feb-07
+; Public Release: 15-Dec-06
+; Global variables:  none
+; Purpose:
+;   Use this script to search for a named item in:
+;   1) A targeted container
+;   2) All surrounding containers you have access to within 2 spaces.
+;   3) Once you find them in a container, you can "keep" the item by having it moved into your pack. (drops on your paperdoll)
+;   4) Instead of keeping the indivual items interactively, you can automatically collect every item found matching your criterion.
+;   5) Use on a targeted vender; allowing purchasing of located items (thus allowing your to hunt though
+;      those dreaded multi-bagged venders more easily for the specific item(s) you want.
+;      (press next to continue once you buy)
+;   6) After the completion of a search, the total number of items found matching your search criterion wil be displayed.
+;   7) Search all vendors surrounding character to a specified radius.  Vendor shopping does not need to be a pain in the butt amy longer!
+;   8) Summary of items found can be saved in HTML format to a user-specified filename.
+;   9) File save shows a progress bytecount.  Files are saved in 2Kbyte chunks, so large files may take a while.
+;
+;   What makes this script so nice is that it will also the search all
+; sub-containers within each main container. It will even search containers within sub-containers to any level.  (as close to recursion as EasyUO will get)
+;
+;  Additional features:
+;    . Search for item intensities GREATER, LESS, or EQUAL to a specified value
+;    . Search for up to 3 separate terms and intensities (and checkbox)
+;    . Remembers the history of your last successful search criterion.  You
+;      can scroll through the results and "Buy?" or "Keep" the items
+;      you want.
+;
+; Menu designed with Menu Designer.
+; v9 - release version
+; v91 - fixed bug where search would hang if a number was one of the main search fields.  Now can search for things like powerscrolls of 110, 115, etc.
+; v92 - fixed bug in item dragging when collecting items from containers and placing them in your main pack.
+; v93 - made object drag now an exevent, no longer works with previous version of easyuo
+; v94 - Added "Scan" feature that allows the user to search though
+;       a vendors' inventory first before making a selection. Press the
+;       "Next" or "Prev" buttons to sort through the summary.  Pressing "Buy" will
+;       attempt to purchase the presently selected item.
+; v95 - internal release adding GREATER-EQ and LESS-EQ
+; v96 - . Multi-vendor searching with radius control, search through vendors or containers
+;         when "Vendors?" is selected, container search is omitted.
+;       . Remember container of object so it can be brought to front of display during review
+;       . "Report All" feature will report everything found, and summarize it if selected.
+;       . HTML output of everything found in last search to user-defined filename
+;       . Automatic lag adjustment for container opening.  Reset upon script startup
+;       . Fixed bug in intensity searching.  Now works correctly.
+;
+;       Note:  Get summary?  will automatically de-select Automatic collect? feature since they
+;              both scan uninterrupted.
+;
+; Thanks to:
+; DosX - OSI testing and suggested "Get Summary?" feature of 0.94
+;============================================
+set %version 0.993
+gosub showEUOMenu1
+gosub OpenBackPack
+wait 20
+gosub OpenPaperdoll
+set %invalid_containers EUN_
+
+set %include_button1 N/A ; N/A, <, <= , >, >=, =
+set %include_button2 GREATER ; N/A, <, <= , >, >=,
+set %include_button3 GREATER ; N/A, <, <= , >, >=,
+
+set %tempfile c:\temp.html
+set %header ^<html^>^<body^>
+set %footer ^</body^>^</html^>
+set %bodystart ^<p , #SPC , style="margin-top:0;margin-bottom:0"^>^<b^>^<font , #SPC , size="4"^>
+set %endbodystart ^</font^>^</b^>^</p^>
+set %body ^<p , #SPC , style="margin-top:0;margin-bottom:0"^>
+set %endbody ^</p^>
+
+set !namespace_name Temp0
+namespace Local !namespace_name
+namespace Copy * from Local STD
+set !search_container N/A
+set !container_level 1
+set #MENUBUTTON 0
+set %foundindex 0
+set %scanfirst #TRUE
+set %cancel #FALSE
+
+set %fileio %header
+set %lag_delay 16 ; self-adjusts for lag
+set %destination #BACKPACKID
+
+item_finder_loop1:
+  menu get EUOCheckBox7
+  if #MENURES = #TRUE
+    menu set EUOCheckBox2 #TRUE ; selecting Vendors? implies searching surrounding area..
+  if #MENUBUTTON = EUOButton3 ; Set destination?
+  {
+    set #MENUBUTTON N/A
+    set #TARGCURS 1
+    repeat
+    until #TARGCURS = 0
+    set %destination #LTARGETID
+  }
+
+  if #MENUBUTTON = EUOButton10 ; Write HTML?
+  {
+    set #MENUBUTTON N/A
+    set #LPC 10000
+    set %temp_string File , #SPC , write , #SPC , in , #SPC , progress
+    menu Set EUOLabel22 %temp_string
+    set %fileio %fileio , %footer
+    gosub WriteHTMLFile2 %fileio
+    set %temp_string File , #SPC , write , #SPC , complete!
+    menu Set EUOLabel22 %temp_string
+    set #LPC 10
+  }
+  menu Get EUOCheckBox2
+  if ( #MENUBUTTON = EUOButton2 ) && ( #MENURES = #FALSE ) ; Search button and search surrounding not checked
+  {
+    set %fileio %header ; start new search accumulation
+    menu Button EUOButton11 208 256 61 37 Keep
+    menu Button EUOButton4 276 256 61 37 Buy?
+    set %count 0
+    set %cancel #FALSE
+    menu delete EUOButton9        ; previous button
+    menu Get EUOCheckBox6  ; get summary checked?
+    {
+      if #MENURES = -1
+        menu delete EUOButton1    ; next button
+      menu Set EUOCheckBox3 #FALSE
+    }
+    set #TARGCURS 1
+    waitloop2:
+      if #TARGCURS = 1
+      goto waitloop2
+    set #LOBJECTID #LTARGETID
+    event macro 17 0 ; last object, open container
+    wait 20
+    set !search_container #CONTID
+    set #NEXTCPOSX 3
+    set #NEXTCPOSY 206
+    gosub SearchContainer
+    set %temp_string FOUND , #spc , %count
+    sound c:\windows\media\ding.wav
+    menu Set EUOLabel22 %temp_string
+    ignoreitem reset
+    set %foundindex %count
+    set #MENUBUTTON 0
+    set !search_container N/A
+    menu Button EUOButton9 72 256 61 37 Prev
+    menu Get EUOCheckBox6  ; get summary checked?
+      if #MENURES = -1
+        menu Button EUOButton1 140 256 61 37 Next
+  }
+
+  if #MENUBUTTON = EUOButton1 ; 'Next' button
+  {
+    set #MENUBUTTON 0
+    if %foundindex > 0
+    {
+      set %foundindex %foundindex + 1
+      if %foundindex > %count
+      {
+        set %foundindex 1
+      }
+      gosub DisplayIndexedProperty %foundindex
+      set %tempcont %cont . %foundindex
+      if %tempcont <> #CONTID
+      {
+        set #LOBJECTID %tempcont
+        gosub FastContainerOpen
+      }
+      set %temp_string %foundindex , #spc ,  of , #spc , %count
+      set #LTARGETID #RESULT
+      menu Set EUOLabel22 %temp_string
+    }
+  }
+  if #MENUBUTTON = EUOButton9 ; 'Prev' button
+  {
+    set #MENUBUTTON 0
+    if %foundindex > 0
+    {
+      set %foundindex %foundindex - 1
+      if %foundindex = 0
+      {
+        set %foundindex %count
+      }
+      gosub DisplayIndexedProperty %foundindex
+      set %tempcont %cont . %foundindex
+      if %tempcont <> #CONTID
+      {
+        set #LOBJECTID %tempcont
+        gosub FastContainerOpen
+      }
+      set %temp_string %foundindex , #spc ,  of , #spc , %count
+      set #LTARGETID #RESULT
+      menu Set EUOLabel22 %temp_string
+    }
+  }
+  if ( #MENUBUTTON = EUOButton4 )  ; Buy?
+  {
+    set #MENUBUTTON 0
+    set %item %findid . %foundindex
+    set %vendor_id %vendor_id . %foundindex
+
+    finditem  %vendor_id G
+    if #FINDKIND <> -1
+    {
+      finditem %item C
+      if #FINDKIND <> -1
+      {
+        exevent Popup %item
+        gosub GumpWait normal_gump normal_gump
+        set #CONTPOSX 0
+        set #CONTPOSY 20
+        set %clickx #CONTPOSX + 18
+        set %clicky #CONTPOSY + 21 ; hack to make exevent popup work
+        click %clickx %clicky
+        gosub GumpWait generic_gump generic_gump
+        generic_wait1:
+          if #CONTNAME = generic_gump
+            goto generic_wait1
+        set %cont %cont . %foundindex
+        finditem %item C_ , %cont
+        if #FINDKIND = -1
+        {
+          set %property . %foundindex No , #SPC , Longer , #SPC , Available$
+          gosub DisplayIndexedProperty %foundindex
+        }
+      }
+    }
+    else
+    {
+      display ok Vendor not in range to buy
+    }
+  }
+  if ( #MENUBUTTON = EUOButton11 )  ; Keep?
+  {
+    set #MENUBUTTON 0
+    set %item %findid . %foundindex
+    finditem %item C
+    if #FINDKIND <> -1
+    {
+      wait 20
+      exevent drag #FINDID #FINDSTACK
+      wait 10
+      exevent dropc %destination
+      wait 20
+    }
+  }
+  menu Get EUOCheckBox2
+  if ( #MENUBUTTON = EUOButton2 ) && ( #MENURES = -1 )
+  {
+    set %fileio %header
+    set %count 0
+    set %cancel #FALSE
+    menu delete EUOButton9
+    menu Get EUOCheckBox6  ; get summary checked?
+    if #MENURES = -1
+    {
+      menu delete EUOButton1    ; next button
+      menu Set EUOCheckBox3 #FALSE
+    }
+    menu Set EUOLabel22 Searching...
+    search_surrounding_loop1:
+      menu get EUOCheckBox7  ; search vendors?
+      if #MENURES = #FALSE
+      {
+        finditem * G_2
+        event property #FINDID
+        set %vendor #FALSE
+        menu del EUOButton4 ; don't need "Buy" button.
+        menu Button EUOButton11 208 256 61 37 Keep
+        set %search_criterion ( ( ( Contents: in #PROPERTY ) || ( Items, in #PROPERTY ) ) && ( #FINDTYPE notin %invalid_containers ) )
+      }
+      else
+      {
+        menu get EUOEdit7
+        finditem HS_IS_AV_XU G_ , #MENURES
+        set %shopname Shop , #SPC , Name:
+        event property #FINDID
+        set %vendor #TRUE
+        set %search_criterion %shopname in #PROPERTY
+        menu del EUOButton11 ; don't need "Keep" button.
+        menu Button EUOButton4 276 256 61 37 Buy?
+      }
+      if #FINDKIND <> -1
+      {
+        if %search_criterion = #TRUE
+        {
+          ignoreitem #FINDID
+          set %zz #CHARPOSZ + 20
+          if ( ( #FINDZ >= #CHARPOSZ ) && ( #FINDZ < %zz ) ) || ( %vendor = #TRUE )
+          {
+            set #LOBJECTID #FINDID
+            set %vendor_id #FINDID
+            gosub FastContainerOpen
+            set !search_container #CONTID
+            set %findz #FINDZ
+            gosub SearchContainer
+            set #LPC 10
+            set %foundindex %count
+          }
+        }
+        else
+        {
+          ignoreitem #FINDID
+        }
+        goto search_surrounding_loop1
+      }
+      else
+      {
+        set %temp_string FOUND , #spc , %count
+        sound c:\windows\media\ding.wav
+        menu Set EUOLabel22 %temp_string
+        set %foundindex %count
+        ignoreitem reset
+        set #MENUBUTTON 0
+        menu Button EUOButton9 72 256 61 37 Prev
+        menu Get EUOCheckBox6  ; get summary checked?
+        if #MENURES = -1
+          menu Button EUOButton1 140 256 61 37 Next
+
+        set #LPC 10
+        goto item_finder_loop1
+      }
+  }
+  if #MENUBUTTON = EUOButton6
+  {
+    set #MENUBUTTON 0
+    menu delete EUOButton6
+    if %include_button1 = N/A
+    {
+      set %include_button1 GREATER
+      menu Button EUOButton6 188 4 29 21 >
+      goto skip_EUOButton6
+    }
+    if %include_button1 = GREATER
+    {
+      set %include_button1 GREATEREQ
+      menu Button EUOButton6 188 4 29 21 >=
+      goto skip_EUOButton6
+    }
+    if %include_button1 = GREATEREQ
+    {
+      set %include_button1 LESS
+      menu Button EUOButton6 188 4 29 21 <
+      goto skip_EUOButton6
+    }
+    if %include_button1 = LESS
+    {
+      set %include_button1 LESSEQ
+      menu Button EUOButton6 188 4 29 21 <=
+      goto skip_EUOButton6
+    }
+    if %include_button1 = LESSEQ
+    {
+      set %include_button1 EQUAL
+      menu Button EUOButton6 188 4 29 21 =
+      goto skip_EUOButton6
+    }
+    if %include_button1 = EQUAL
+    {
+      set %include_button1 N/A
+      menu Button EUOButton6 188 4 29 21 N/A
+      goto skip_EUOButton6
+    }
+  }
+  skip_EUOButton6:
+  if #MENUBUTTON = EUOButton7
+  {
+    set #MENUBUTTON 0
+    menu delete EUOButton7
+    if %include_button2 = N/A
+    {
+      set %include_button2 GREATER
+      menu Button EUOButton7 188 28 29 21 >
+      goto skip_EUOButton7
+    }
+    if %include_button2 = GREATER
+    {
+      set %include_button2 GREATEREQ
+      menu Button EUOButton7 188 28 29 21 >=
+      goto skip_EUOButton7
+    }
+    if %include_button2 = GREATEREQ
+    {
+      set %include_button2 LESS
+      menu Button EUOButton7 188 28 29 21 <
+      goto skip_EUOButton7
+    }
+    if %include_button2 = LESS
+    {
+      set %include_button2 LESSEQ
+      menu Button EUOButton7 188 28 29 21 <=
+      goto skip_EUOButton7
+    }
+    if %include_button2 = LESSEQ
+    {
+      set %include_button2 EQUAL
+      menu Button EUOButton7 188 28 29 21 =
+      goto skip_EUOButton7
+    }
+    if %include_button2 = EQUAL
+    {
+      set %include_button2 N/A
+      menu Button EUOButton7 188 28 29 21 N/A
+      goto skip_EUOButton7
+    }
+  }
+  skip_EUOButton7:
+  if #MENUBUTTON = EUOButton8
+  {
+    set #MENUBUTTON 0
+    if %include_button3 = N/A
+    {
+      set %include_button3 GREATER
+      menu Button EUOButton8 188 52 29 21 >
+      goto skip_EUOButton8
+    }
+    if %include_button3 = GREATER
+    {
+      set %include_button3 GREATEREQ
+      menu Button EUOButton8 188 52 29 21 >=
+      goto skip_EUOButton8
+    }
+    if %include_button3 = GREATEREQ
+    {
+      set %include_button3 LESS
+      menu Button EUOButton8 188 52 29 21 <
+      goto skip_EUOButton8
+    }
+    if %include_button3 = LESS
+    {
+      set %include_button3 LESSEQ
+      menu Button EUOButton8 188 52 29 21 <=
+      goto skip_EUOButton8
+    }
+    if %include_button3 = LESSEQ
+    {
+      set %include_button3 EQUAL
+      menu Button EUOButton8 188 52 29 21 =
+      goto skip_EUOButton8
+    }
+    if %include_button3 = EQUAL
+    {
+      set %include_button3 N/A
+      menu Button EUOButton8 188 52 29 21 N/A
+      goto skip_EUOButton8
+    }
+  }
+  skip_EUOButton8:
+goto item_finder_loop1
+;---------------------------------------------------
+sub WriteHTMLProperty2
+  set %p1 %1
+  set #LPC 10000
+  set %htmlline 1
+
+  NewParseProperty_loop2:
+    str pos %p1 $ 1
+    if #STRRES <> 0
+    {
+      set %loc #STRRES - 1
+      str left %p1 %loc
+      set %string #STRRES
+      if %htmlline = 1
+      {
+        set %fileio ( %fileio , %bodystart , %string , %endbodystart )
+      }
+      else
+      {
+        set %fileio ( %fileio , %body , %string , %endbody )
+      }
+      set %loc %loc + 1
+      str del %p1 1 %loc
+      set %p1 #STRRES
+      set %htmlline %htmlline + 1
+      goto NewParseProperty_loop2
+    }
+  set #LPC 10
+return %b1
+
+;---------------------------------------------------
+sub WriteHTMLFile2
+
+  set %file %1
+  set %line 1
+  set %maxlinelength 2000
+  set %paragraphcnt 0
+  set %end #FALSE
+  menu get EUOEdit8
+  set %tempfile #MENURES ; retrieve filename
+  display okcancel Do you want to write this to %tempfile , ?
+  if #DISPRES = cancel
+    return
+  WriteHTMLFile2_loop1:
+    str pos %file ^</p^> %paragraphcnt
+    if #STRRES = 0
+      goto WriteHTMLFile2_skip1
+    if #STRRES < %maxlinelength
+    {
+      set %paragraphcnt %paragraphcnt + 1
+      goto WriteHTMLFile2_loop1
+    }
+  WriteHTMLFile2_skip1:
+    if #STRRES = 0
+    {
+      str len %file
+      set %len #STRRES
+      set %end #TRUE
+    }
+    else
+    {
+      set %paragraphcnt %paragraphcnt - 1
+      str pos %file ^</p^> %paragraphcnt
+      set %len #STRRES + 5 ; length of termination too
+    }
+    str left %file %len
+    if %line = 1
+    {
+      execute cmd.exe /c echo #STRRES > %tempfile
+      str len %file
+      set %maxfilesize #STRRES
+    }
+    else
+    {
+      execute cmd.exe /c echo #STRRES >> %tempfile
+      str len %file
+      set %percent %maxfilesize - #STRRES
+      set %temp_string %percent , #SPC , of , #SPC , %maxfilesize , #SPC , written
+      menu Set EUOLabel22 %temp_string
+    }
+    set %line %line + 1
+    str del %file 1 %len
+    set %file #STRRES
+    if %end = #TRUE
+      return
+    set %paragraphcnt 0
+    goto WriteHTMLFile2_loop1
+return
+;---------------------------------------------------
+sub FastContainerOpen
+  set %oldcontid #CONTID
+  FastContainerOpen_loop1:
+    set %opencnt #SCNT
+    gosub SyncTextScan
+    event macro 17 0
+    wait %lag_delay
+    FastContainerOpen_loop2:
+      if ( %oldcontid = #CONTID ) && ( #SCNT < ( %opencnt + 4 ) )
+      {
+        gosub FindValidText You_must_wait_to
+        if %2 = 1
+        {
+          set %lag_delay %lag_delay + 1
+          goto FastContainerOpen_loop1 ; didn't open, open it again.
+        }
+        goto FastContainerOpen_loop2
+      }
+return
+;---------------------------------------------------
+; %1 - index to display
+; returns #FINDID of displayed item
+sub DisplayIndexedProperty
+  set %index %1
+  set #LPC 10000
+  for %xx 3 21
+  {
+    set %label EUOLabel , %xx
+    menu Set %label #spc ; clear the display
+  }
+
+  set %line_count 3 ; counter for menu line starts at 3
+  set %begin 1
+  set %end 1
+  set %property %property . %index
+  DisplayIndexedProperty_loop1:
+    str Mid %property %end 1
+    if #STRRES = $
+    {
+      set %label EUOLabel , %line_count
+      set %len ( %end - %begin )
+      str Mid %property %begin %len
+      menu Set %label #STRRES
+      set %line_count %line_count + 1
+      set %begin %end + 1
+      str Len %property
+      if %end >= #STRRES
+        goto DisplayIndexedProperty_end
+    }
+    set %end %end + 1
+    goto DisplayIndexedProperty_loop1
+  DisplayIndexedProperty_end:
+  for %xx %line_count 22 ; clear the rest of the lines
+  {
+    set %label EUOLabel , %xx
+    menu Set %label #spc
+  }
+  set %findid %findid . %index
+  set #LPC 10
+return %findid
+
+;---------------------------------------------------
+
+sub SearchContainer
+  set #LPC 10000
+  for %xx 3 21
+  {
+    set %label EUOLabel , %xx
+    menu Set %label #spc ; clear the display
+  }
+  menu Set EUOLabel22 Searching...
+  menu Get EUOEdit1
+  set %search_string #MENURES
+  continue_search_loop1:
+    if #MENUBUTTON = EUOButton5 || %cancel = #TRUE
+    {
+      menu Set EUOLabel22 Canceling...
+      set %cancel #TRUE
+      return
+    }
+    finditem * C_ , !search_container
+    if ( #FINDKIND = -1 ) || ( !search_container = %mypaperdoll ) || ( !search_container = %destination ) ; || ( !search_container = #BACKPACKID )
+      goto continue_search_skip1
+      
+    menu Get EUOCheckBox8 ; Report All?
+    set %report_all #FALSE
+    if #MENURES = #TRUE
+      set %report_all #TRUE
+    event property #FINDID
+    if ( %search_string in #PROPERTY ) || ( %report_all = #TRUE ) || ( ??? in %search_string )
+    {
+      gosub FindRequestedItem
+      if ( #RESULT = #TRUE ) || ( %report_all = #TRUE )
+      {
+        gosub WriteHTMLProperty2 #PROPERTY
+        sound c:\windows\media\tada.wav
+        set %count %count + 1
+        gosub ParseProperty #PROPERTY
+        menu Get EUOCheckBox6 ; get summary active, don't stop
+        if #MENURES = -1
+        {
+          menu Set EUOLabel22 Searching...
+          goto skip_search_loop2
+        }
+        set #MENUBUTTON 0
+        continue_search_loop2:
+          menu Get EUOCheckBox3
+          if ( #MENUBUTTON = EUOButton3 ) || ( #MENURES = -1 )
+          {
+            if ( #WEIGHT > ( #MAXWEIGHT - 10 ) ) || ( #WEIGHT >= 425 )
+            {
+              display ok You are nearly overweight.
+              set %cancel #TRUE
+            }
+            else
+            {
+              exevent drag #FINDID #FINDSTACK
+              wait 10
+              exevent dropc %destination
+              wait 20
+              set #MENUBUTTON EUOButton1
+            }
+          }
+          if #MENUBUTTON = EUOButton4
+          {
+            if %use_exevent = #TRUE
+            {
+              exevent Popup %item 1
+            }
+            else
+            {
+              msg Vendor Buy$
+              target 10s
+              set #LTARGETID #FINDID
+              event macro 22 0
+              set #MENUBUTTON 0
+            }
+          }
+          if #MENUBUTTON = EUOButton5 || %cancel = #TRUE
+          {
+            menu Set EUOLabel22 Canceling...
+            set %cancel #TRUE
+            return
+          }
+          if #MENUBUTTON <> EUOButton1
+            goto continue_search_loop2
+          menu Set EUOLabel22 Searching...
+        }
+    }
+skip_search_loop2:
+    if ( ( Contents: in #PROPERTY ) || ( Items, in #PROPERTY ) && ( #FINDTYPE notin %invalid_containers ) )
+    {
+      ignoreitem #FINDID
+      menu Get EUOCheckBox1
+      if #MENURES = -1
+      {
+        set %prev_level !container_level - 1
+        set %prev_name Temp , %prev_level
+        namespace Push
+        set !namespace_name Temp , !container_level
+        namespace Local !namespace_name
+        namespace Copy * from Local %prev_name
+        set !container_level !container_level + 1
+        set #LOBJECTID #FINDID
+        gosub FastContainerOpen
+        set !search_container #CONTID
+        gosub SearchContainer
+        set #NEXTCPOSX 3
+        set #NEXTCPOSY 206
+        namespace Clear
+        namespace Pop
+        set #LOBJECTID !search_container
+        if #MENUBUTTON = EUOButton5
+          return
+      }
+      goto continue_search_loop1
+    }
+    ignoreitem #FINDID
+    goto continue_search_loop1
+  
+  continue_search_skip1:
+  set #LPC 10
+return
+;-------------------------------------------------------------------------------
+; %1 = FindText
+sub SyncTextScan
+  set %_jindex #jindex + 1
+return
+;-------------------------------------------------------------------------------
+; %1 = string to search for
+; %2 = 0 = bad text, 1 = string found
+sub FindValidText
+  if ( %_jindex = N/A ) || ( #jindex < %_jindex )
+  {
+    set %_jindex #jindex
+  }
+  set %2 0
+  FindValidText_loop1:
+    if #jindex >= %_jindex
+    {
+      scanjournal %_jindex
+      if %1 in #journal
+      {
+        if :_ , %1 notin #journal
+        {
+          set %2 1
+          set %_jindex %_jindex + 1
+          return
+        }
+      }
+      set %_jindex %_jindex + 1
+      goto FindValidText_loop1
+    }
+return
+;-------------------------------------------------------------------------------
+sub OpenBackPack
+    event macro 8 7 ; open backpack
+    wait 40
+    set %mypack #CONTID
+    contpos 750 330
+    wait 15
+return
+;-------------------------------------------------------------------------------
+sub OpenPaperdoll
+  event macro 8 1 ; open paperdoll
+  gosub GumpWait NULL paperdoll_gump NULL
+  contpos 750 0
+  set %mypaperdoll #CONTID
+return
+;-------------------------------------------------------------------------------
+; %1 = GumpWait
+; %2 = Gumpname 1
+; %3 = Gumpname 2
+sub GumpWait
+  wait 10
+  set %timedelay #SCNT
+  loopwait1:
+    if #CONTNAME = %1 || #CONTNAME = %2
+      return
+    if #SCNT > %timedelay + 7
+      return
+    goto loopwait1
+return
+;---------------------------------------------------
+; %1 = %search_string
+; %2 = EUOEdit field for intensity
+; %3 = function
+sub ScanforItemIntensity
+  namespace push
+  namespace local scan
+  set !property #PROPERTY
+  set %include_button %3
+ScanforItemIntensity_loop1:
+  str pos !property %1
+  if #STRRES = 0
+  {
+    namespace pop
+    return #FALSE
+  }
+
+  set %position #STRRES
+  str len %1
+  set %length #STRRES
+  set %start %position + %length
+  str len !property
+  set %prop_len #STRRES
+  set %start %prop_len - %start
+  str right !property %start
+  set %sub_str #STRRES
+  str Pos %sub_str $
+  set %length #STRRES - 1     ; chop off "$"
+  str left %sub_str %length   ; get string without "$"
+  set !property %sub_str
+  set %sub_str #STRRES        ; store number without "$"
+  set %length %length + 1
+  str del !property 1 %length
+  set !property #STRRES
+  set !temp_str
+  set !continue #TRUE
+  str len %sub_str
+  set !cnt #STRRES
+  set !others #DOT , , , -
+  while !continue = #TRUE
+  {
+    str mid %sub_str !cnt 1
+    if ( ( ( #STRRES >= 0 ) && ( #STRRES <= 9 ) ) || ( #STRRES in !others ) )
+    {
+      set !temp_str #STRRES , !temp_str
+    }
+    else
+    {
+      if #STRRES notin % , s
+      set !continue #FALSE
+    }
+    set !cnt !cnt - 1
+    if !cnt = 0
+      set !continue #FALSE
+  }
+
+  set %sub_str !temp_str
+  if %include_button = N/A
+    goto check_next_property1
+  if %include_button = GREATER
+  {
+    menu get %2
+    if %sub_str > #MENURES
+      goto check_next_property1
+  }
+  if %include_button = LESS
+  {
+    menu get %2
+    if %sub_str < #MENURES
+      goto check_next_property1
+  }
+  if %include_button = EQUAL
+  {
+    menu get %2
+    if %sub_str = #MENURES
+      goto check_next_property1
+  }
+  if %include_button = LESSEQ
+  {
+    menu get %2
+    if %sub_str <= #MENURES
+      goto check_next_property1
+  }
+  if %include_button = GREATEREQ
+  {
+    menu get %2
+    if %sub_str >= #MENURES
+      goto check_next_property1
+  }
+  goto ScanforItemIntensity_loop1
+check_next_property1:
+  namespace pop
+  return #TRUE
+return
+;---------------------------------------------------
+; assumes #PROPERTY has been setup
+sub FindRequestedItem
+  menu Get EUOEdit1
+  set %search_string #MENURES
+  if ( %search_string in #PROPERTY ) || ( ??? in %search_string )
+  {
+    gosub ScanforItemIntensity %search_string EUOEdit2 %include_button1
+    if #RESULT = #TRUE
+      goto check_next_property11
+  }
+  return #FALSE
+
+check_next_property11: ; success so far
+
+  menu Get EUOCheckBox4 ; and?
+  if #MENURES = 0
+    return #TRUE
+  menu Get EUOEdit3
+  set %search_string #MENURES
+  if %search_string in #PROPERTY
+  {
+    gosub ScanforItemIntensity %search_string EUOEdit4 %include_button2
+    if #RESULT = #TRUE
+      goto check_next_property2
+  }
+  return #FALSE
+
+check_next_property2: ; success so far
+  
+  menu Get EUOCheckBox5 ; and?
+  if #MENURES = 0
+    return #TRUE
+  menu Get EUOEdit5
+  set %search_string #MENURES
+  if %search_string in #PROPERTY
+  {
+    gosub ScanforItemIntensity %search_string EUOEdit6 %include_button3
+    if #RESULT = #TRUE
+      goto check_next_property3
+  }
+  return #FALSE
+
+check_next_property3: ; success so far
+  return #TRUE
+return
+;---------------------------------------------------
+sub ParseProperty
+  set #LPC 10000
+  set %p1 %1
+  set %line_count 3 ; counter for menu line starts at 3
+  set %property . %count %p1
+  set %findid . %count #FINDID
+  set %cont . %count #CONTID
+  set %vendor_id . %count %vendor_id
+  ParseProperty_loop1:
+    str pos %p1 $ 1
+    if #STRRES <> 0
+    {
+      set %loc #STRRES - 1
+      str left %p1 %loc
+      set %string #STRRES
+      set %label EUOLabel , %line_count
+      menu Set %label #STRRES
+      set %loc %loc + 1
+      str del %p1 1 %loc
+      set %p1 #STRRES
+      set %line_count %line_count + 1
+      goto ParseProperty_loop1
+    }
+  for %xx %line_count 22 ; clear the rest of the lines
+  {
+    set %label EUOLabel , %xx
+    menu Set %label #spc
+  }
+return
+
+;--------- EasyUO Menu Designer Code Begin ---------
+sub showEUOMenu1
+	menu Clear
+	menu Window Title Miffy's Item Finder , #SPC , %version
+	menu Window Color BtnFace
+	menu Window Size 431 296
+	menu Font Transparent #true
+	menu Font Align Right
+	menu Font Name MS Sans Serif
+	menu Font Size 8
+	menu Font Style
+	menu Font Color WindowText
+	menu Font Transparent #false
+	menu Font Align Left
+	menu Text EUOLabel1 0 8 Search For:
+	menu Text EUOLabel3 4 96
+	menu Text EUOLabel4 4 112
+	menu Text EUOLabel5 4 128
+	menu Text EUOLabel6 4 144
+	menu Text EUOLabel7 4 160
+	menu Text EUOLabel8 4 176
+	menu Text EUOLabel9 4 192
+	menu Text EUOLabel10 4 208
+	menu Text EUOLabel11 4 224
+	menu Text EUOLabel12 4 240
+	menu Text EUOLabel13 160 96
+	menu Text EUOLabel14 160 112
+	menu Text EUOLabel15 160 128
+	menu Text EUOLabel16 160 144
+	menu Text EUOLabel17 160 160
+	menu Text EUOLabel18 160 176
+	menu Text EUOLabel19 160 192
+	menu Text EUOLabel20 160 208
+	menu Text EUOLabel21 160 224
+	menu Text EUOLabel22 160 240
+	menu Text EUOLabel2 396 80 Radius
+	menu Font BGColor Window
+	menu Edit EUOEdit1 60 4 121 Peacemaking
+	menu Font BGColor BtnFace
+	menu Button EUOButton1 140 256 61 37 Next
+	menu Font Size 10
+	menu Button EUOButton2 4 256 61 37 Search
+	menu Font Size 8
+	menu Check EUOCheckBox1 292 44 137 17 #true Search sub-containers?
+	menu Check EUOCheckBox2 292 28 125 17 #false Search surrounding?
+	menu Check EUOCheckBox3 292 12 125 17 #false Automatic collect?
+	menu Check EUOCheckBox6 292 60 113 17 #false Get Summary?
+	menu Button EUOButton5 364 256 61 37 Cancel
+	menu Font BGColor Window
+	menu Edit EUOEdit2 220 4 41
+	menu Font BGColor BtnFace
+	menu Button EUOButton6 188 4 29 21 N/A
+	menu Font BGColor Window
+	menu Edit EUOEdit3 60 28 121 Stealing
+	menu Edit EUOEdit4 220 28 41
+	menu Font BGColor BtnFace
+	menu Button EUOButton7 188 28 29 21 >
+	menu Font BGColor Window
+	menu Edit EUOEdit5 60 52 121 Wrestling
+	menu Edit EUOEdit6 220 52 41
+	menu Font BGColor BtnFace
+	menu Button EUOButton8 188 52 29 21 >
+	menu Check EUOCheckBox4 8 28 41 17 #false and
+	menu Check EUOCheckBox5 8 52 41 17 #false and
+	menu Button EUOButton9 72 256 61 37 Prev
+	menu Check EUOCheckBox7 292 76 73 17 #false Vendors?
+	menu Font BGColor Window
+	menu Edit EUOEdit7 364 76 29 9
+	menu Font BGColor BtnFace
+	menu Check EUOCheckBox8 8 76 69 17 #false Report All
+	menu Font BGColor Window
+	menu Edit EUOEdit8 208 76 77 c:\temp.html
+	menu Font BGColor BtnFace
+	menu Button EUOButton10 132 76 75 21 Write HTML?
+	menu Button EUOButton3 92 76 35 21 Dest
+	menu Show 421 270
+return
+;--------- EasyUO Menu Designer Code End ---------

@@ -1,0 +1,150 @@
+;-----------------------------------------------------------
+; Script Name: TrainMyx's Item Paperdoll/Container Durability Checker
+; Author: TrailMyx
+; Version: 1.0
+; Client Tested with: 6.0.1.6
+; EUO version tested with: 1.5 118
+; Shard: OSI, FS(?)
+; Revision Date:  6/15/2007
+; Public Release: ...
+; Global Variables Used: None
+; Purpose/Features:
+;   . Scan paperdoll (or targeted container when you set %scan_container to #TRUE) to generate
+;   a repair report.
+;   . Change value of %warning_percentage to change your repair threshold
+;-------------------------------------------------------
+set %warning_percentage 80 ; %80 or less will return a warning.
+set %warnstring
+set %scancontainer #CHARID
+set #LPC 1000
+
+event macro 8 1 ; open paperdoll
+wait 30
+
+;------- set %scan_container to #TRUE to target and scan a container
+set %scan_container #FALSE
+if %scan_container = #TRUE
+{
+  display ok Please target the containter you would like to scan.
+  set #TARGCURS 1
+  repeat
+  until #TARGCURS = 0
+  set %scancontainer #LTARGETID
+  set #LOBJECTID #LTARGETID
+  event macro 17 0
+  wait 20
+}
+
+mainloop1:
+  finditem * C_ , %scancontainer
+  if #FINDKIND <> -1
+  {
+    set %item #FINDID
+    event property %item
+    set %searchfor Durability , #SPC
+    if %searchfor in #PROPERTY
+    {
+      gosub TM_CheckMaxDurability %item
+      set %max #RESULT
+      gosub TM_CheckCurrentDurability %item
+      set %current #RESULT
+      gosub TM_GetItemName %item
+      if #RESULT <> #TRUE
+      {
+        set %name #RESULT
+        set %percent %current * 100 / %max
+        if %percent <= %warning_percentage
+        {
+          set %warnstring %warnstring , %name , : , #SPC , %current , / , %max , $
+        }
+      }
+    }
+    ignoreitem %item
+    goto mainloop1
+  }
+  display ok Repair scan summary: , $ , $ , %warnstring
+  stop
+;-------------------------------------------------------
+; %1 = #FINDID of item to evaluate
+sub TM_CheckCurrentDurability
+  namespace push
+  namespace local CMD
+  set !item %1
+  event property !item
+  set !property #PROPERTY
+  set !search Durability , #SPC
+  str count !property !search
+  if #STRRES > 1
+  {
+    str pos !property !search #STRRES
+    set #STRRES #STRRES - 1
+    str del !property 1 #STRRES
+    set !property #STRRES
+  }
+  str pos !property !search 1
+  set #STRRES #STRRES + 10
+  str del !property 1 #STRRES ; 87 / 87$
+  set !temp #STRRES
+  str pos #STRRES / 1
+  set #STRRES #STRRES - 2
+  str left !temp #STRRES
+  set #RESULT #STRRES
+  namespace pop
+return #RESULT
+;-------------------------------------------------------
+; %1 = #FINDID of item to evaluate
+sub TM_CheckMaxDurability
+  namespace push
+  namespace local CCD
+  set !item %1
+  event property !item
+  set !property #PROPERTY
+  set !search Durability , #SPC
+  str count !property !search
+  if #STRRES > 1
+  {
+    str pos !property !search #STRRES
+    set #STRRES #STRRES - 1
+    str del !property 1 #STRRES
+    set !property #STRRES
+  }
+  str pos !property !search 1
+  set #STRRES #STRRES + 10
+  str del !property 1 #STRRES ; 87 / 87$
+  set !temp #STRRES
+  str pos #STRRES / 1
+  str del !temp 1 #STRRES
+  set !temp #STRRES
+  str pos #STRRES $ 1
+  set #STRRES #STRRES - 1
+  str left !temp #STRRES
+  set #RESULT #STRRES
+  namespace pop
+return #RESULT
+;-------------------------------------------------------------------------------
+sub TM_GetItemName
+  namespace push
+  namespace local GIN
+  set !item %1
+  set !timeout #SCNT + 2
+  event property !item
+  str len #PROPERTY
+  if #STRRES <= 1
+  {
+    namespace pop
+    return #TRUE
+  }
+  str pos #PROPERTY $
+  set #STRRES #STRRES - 1
+  str left #PROPERTY #STRRES
+  set !tempstr #STRRES
+  set #RESULT !tempstr
+  str pos #PROPERTY :
+  if #STRRES > 0
+  {
+    set #STRRES #STRRES - 1
+    str left !tempstr #STRRES
+    set #RESULT #STRRES
+  }
+  namespace pop
+return #RESULT

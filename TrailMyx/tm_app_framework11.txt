@@ -1,0 +1,543 @@
+;=================================================================
+; Script Name: TrailMyx's Application Framework
+; Author: TrailMyx
+; Version: x.xx
+; Shard OSI / FS: OSI / FS OK
+; Revision Date: 9/29/2007
+; Purpose: Build an EasyUO graphical user interface quickly
+;
+; Features:
+;  Includes 1 journal handler (JOURNAL)
+;  Setup file save/load
+;  Pause function
+;  UI updating
+;  Button Handling
+;
+;  Type: "journal test" to test journal handler..
+;
+; Requirements:
+;  menu edit EUOStatus
+;  menu edit EUOEditFilename
+
+; Globals:
+;
+; Special Thanks:
+;
+; Beta testers:
+;=================================================================
+
+set %version vx.xx
+gosub Setup
+
+; ---------------------------------------------------------------------------
+; ------------------------------ Main Begins --------------------------------
+; ---------------------------------------------------------------------------
+Main_loop:
+
+  if #MENUBUTTON <> N/A
+    gosub HandleButtons
+
+  if %paused = #FALSE
+    gosub HandleScriptFunctions
+
+  gosub UpdateUI
+
+  goto Main_loop
+; ---------------------------------------------------------------------------
+; ------------------------------ End of Main --------------------------------
+; ---------------------------------------------------------------------------
+sub HandleButtons
+  if #MENUBUTTON = EUOButton1
+  {
+    display ok #MENUBUTTON , #SPC , handled correctly
+    set #MENUBUTTON N/A
+  }
+return
+; ---------------------------------------------------------------------------
+sub HandleScriptFunctions
+  gosub TM_AdvJournalScan JOURNAL VALID_ADVANCE journal_test
+  if #RESULT = #TRUE
+  {
+    display ok Journal handler functioning properly
+    gosub TM_AdvJournalSync JOURNAL
+  }
+return
+; ---------------------------------------------------------------------------
+sub UpdateUI
+  if #SCNT > %ui_update_time
+  {
+    set %ui_update_time #SCNT + %ui_update_rate
+  }
+return
+; ---------------------------------------------------------------------------
+sub Setup
+  gosub TM_AddUnderscore #SHARD
+  set %shard #RESULT
+  gosub TM_AddUnderscore #CHARNAME
+  set %charname #RESULT
+  str left %charname 5
+  if #STRRES = Lord , #SPC || #STRRES = Lady , #SPC
+  {
+    str del %charname 1 5
+    set %charname #STRRES
+  }
+  str left %shard 10       ; limit shard name to 10 characters
+  set %shard #STRRES
+  str left %charname 10    ; limit character name to 10 characters
+  set %charname #STRRES
+
+  gosub showEUOMenu1
+
+  call %setupfile ; load a previous setup
+
+  set %configfile c:\ , %shard , _ , %charname , _setup.txt
+  call %configfile
+
+  if %setupfile <> N/A
+  {
+    gosub LoadSetup
+    menu set EUOEditFilename %setupfile
+  }
+  else
+  {
+    menu set EUOStatus No configuration file found, using defaults..
+; put default code here..
+  }
+
+; Initialize script with loaded information
+
+  set #MENUBUTTON N/A
+  set %runtime_lpc 100
+  set #LPC %runtime_lpc
+  set %ui_update_time #SCNT
+  set %ui_update_rate 5 ; 5 seconds
+  set %paused #FALSE
+  gosub TM_AdvJournalSync JOURNAL 100
+  menu set EUOStatus Setup complete!
+return
+; ---------------------------------------------------------------------------
+sub LoadSetup
+  set !temp_lpc #LPC
+  set #LPC 1000
+  menu set EUOStatus Loading setup...
+  menu get EUOEditFilename
+  gosub TM_FileSystem_LoadFile #MENURES
+
+  menu set EUOEditSample %EUOEditSample
+  menu set EUOStatus Setup load complete!
+  set #LPC !temp_lpc
+return
+; ---------------------------------------------------------------------------
+sub SaveSetup
+  set !temp_lpc #LPC
+  set #LPC 1000
+  menu set EUOStatus Saving setup....
+  gosub TM_FileSystem_CreateFileHandle save_handle
+
+  menu get EUOEditFilename
+  set %EUOEditFilename #MENURES
+  gosub TM_FileSystem_SaveVariable local std save_handle EUOEditFilename
+
+  menu get EUOEditSample
+  set %EUOEditSample #MENURES
+  gosub TM_FileSystem_SaveVariable local std save_handle EUOEditSample
+
+  gosub TM_FileSystem_SaveArray local SAMPLE_NS save_handle array_name 0 !array_size
+
+  gosub TM_FileSystem_SaveFile save_handle %EUOEditFilename
+  execute cmd.exe /c echo set , #spc , % , setupfile , #spc , %EUOEditFilename > %configfile
+  set #LPC 100
+  menu set EUOStatus Setup save complete!
+  set #LPC !temp_lpc
+return
+;-------------------------------------------------------------------------------
+; %1 - string to mung
+sub TM_AddUnderscore
+  namespace push
+  namespace local AU
+  set !tempstring %1
+  AddUnderscore_loop1:
+    str pos !tempstring #SPC
+    if #STRRES <> 0
+    {
+      set !val #STRRES - 1
+      str left !tempstring !val
+      set !left #STRRES
+      set !val !val + 1
+      str del !tempstring 1 !val
+      set !tempstring !left , _ , #STRRES
+      goto AddUnderscore_loop1
+    }
+  set #RESULT !tempstring
+  namespace pop
+return #RESULT
+;-------------------------------------------------------------------------------
+; %1 - Journal Name
+; %2 - #LPC setting (optional)
+; Brings !_jindex up to the most recent #journal entry
+sub TM_AdvJournalSync
+  namespace push
+  namespace local TM_AdvJS_ , %1
+  set !_jindex #jindex + 1
+  if %0 > 1
+    set !lpc_set %2
+  namespace pop
+  set !TM_FunctionCalled #TRUE
+return
+;-------------------------------------------------------------------------------
+; %1 - Journal Name
+; %2 - NONE, ADVANCE , ( _VALID ) - advances jindex pointer, anything else
+; %3, %4, %5, etc strings to match
+; returns #TRUE for match, #FALSE for no match
+;  Will not advance !_jindex pointer to allow for scanning journal history for more than one search.
+;  Also searches for : , #SPC in journal entry to be sure someone isn't spamming the text
+;  About %2 arguments:
+;    NONE: defaults to basic journal scan (no SPAM checking, no #jindex pointer copy advancing)
+;    ADVANCE: no spam checking, advances #jindex copy
+;    VALID: invokes SPAM filtering, no advance of #jindex copy
+;    VALID_ADVANCE, VALIDADVANCE, ADVANCE_VALID, etc.: invokes SPAM filtering, advances of #jindex copy
+sub TM_AdvJournalScan
+  namespace push
+  namespace local TM_AdvJS_ , %1
+  set !args %2
+  set !temp_lpc #LPC
+  if !lpc_set = N/A
+    set #LPC 1000
+  else
+    set #LPC !lpc_set
+  set !num_args %0
+  set !first_arg 3
+  if !_jindex = N/A
+    set !_jindex #jindex
+  if !charname = N/A
+  {
+    set !charname #CHARNAME
+    str left !charname 5
+    if #STRRES = Lord , #SPC || #STRRES = Lady , #SPC
+    {
+      str del !charname 1 5
+      set !charname #STRRES
+    }
+    AdvJournalScan_loop1:
+      str pos !charname #SPC
+      if #STRRES <> 0
+      {
+        set !val #STRRES - 1
+        str left !charname !val
+        set !left #STRRES
+        set !val !val + 1
+        str del !charname 1 !val
+        set !charname !left , _ , #STRRES
+        goto AdvJournalScan_loop1
+      }
+  }
+  set !index !first_arg
+  repeat
+    set !temp_jindex !_jindex
+    set !text % . !index
+    while !temp_jindex <= #jindex
+    {
+      scanjournal !temp_jindex
+      str pos #JOURNAL !charname 1
+      set !namepos #STRRES
+      str count #JOURNAL !charname
+      set !namecnt #STRRES
+      str pos #JOURNAL :_ 1
+      set !smcpos #STRRES
+      str pos #JOURNAL !text 1
+      set !textpos #STRRES
+      if !textpos < !smcpos && !smcpos <> 0 || !smcpos = 1 || :_ notin #JOURNAL || VALID notin !args
+        set !pass #TRUE
+      else
+        set !pass #FALSE
+      if ( !text in #journal && ( ( !namepos = 1 && !namecnt <= 1 ) || !pass ) )
+      {
+        set !temp_jindex !temp_jindex + 1
+        if ADVANCE in !args
+          set !_jindex !temp_jindex
+        set #LPC !temp_lpc
+        namespace pop
+        set !TM_FunctionCalled #TRUE
+        return #TRUE
+      }
+      set !temp_jindex !temp_jindex + 1
+    }
+    set !index !index + 1
+  until !index - !first_arg > !num_args - !first_arg
+  set #LPC !temp_lpc
+  namespace pop
+  set !TM_FunctionCalled #TRUE
+return #FALSE
+;-------------------------------------------------------------------------------
+;--------------------------  Advanced File System  -----------------------------
+;-------------------------------------------------------------------------------
+; %1 - Name of file handle name to create
+sub TM_FileSystem_CreateFileHandle
+  namespace push
+  namespace local TM_FileSystem
+  set !ptr %1 , _ptr ; {userhandle}_ptr
+  set ! . !ptr 0 ; !{userhandle}_ptr (actual pointer)
+  set !handle ! . !ptr
+  set !handle %1 , !handle
+  set ! . !handle ; assume new variable
+  namespace pop
+  set !TM_Function_found #TRUE
+return
+;-------------------------------------------------------------------------------
+; %1 = namespace location (local, global)
+; %2 = namespace name
+; %3 = file handle name
+; %4 = variable name
+sub TM_FileSystem_SaveVariable
+  namespace push
+  namespace local TM_FileSystem
+  set !ns_loc %1
+  set !ns_name %2
+  set !handle %3
+  set !var %4
+  set !sep 
+  set !temp_LPC #LPC
+  set #LPC 1000
+  if !handle = handle
+    set !handle __ , handle
+  set !ptr !handle , _ptr ; {userhandle}_ptr
+  set !handle_copy !handle
+  if ! . !ptr = N/A
+  {
+    set ! . !ptr 0 ; !{userhandle}_ptr (actual pointer)
+    set !handle_copy ! . !ptr
+    set !handle_copy !handle , !handle_copy
+    set ! . !handle_copy ; assume new variable
+  }
+  set !handle_copy ! . !ptr
+  set !handle_copy !handle , !handle_copy
+  if !ns_loc = local && !ns_name = std
+    set !value % . !var
+  else
+  {
+    namespace copy !var from !ns_loc !ns_name
+    set !value ! . !var
+  }
+  gosub TM_AddUnderscore !value ; must not have spaces in stored variables!!!
+  set ! . !handle_copy ! . !handle_copy , !ns_loc , !sep , !ns_name , !sep , !var , !sep , #RESULT , !sep
+  str len ! . !handle_copy
+  if #STRRES > 2000
+  {
+    set !len #STRRES
+    str left ! . !handle_copy 2000
+    set !temp #STRRES
+    str del ! . !handle_copy 1 2000
+    set ! . !handle_copy !temp
+    set ! . !ptr ! . !ptr + 1
+    set !handle_copy ! . !ptr
+    set !handle_copy !handle , !handle_copy
+    set ! . !handle_copy #STRRES
+  }
+  set !value
+  set !temp
+  set #LPC !temp_LPC
+  namespace pop
+  set !TM_Function_found #TRUE
+return
+;-------------------------------------------------------------------------------
+; %1 = namespace location (local, global)
+; %2 = namespace name
+; %3 = file handle name
+; %4 = array name
+; %5 = starting index
+; %6 = ending index
+sub TM_FileSystem_SaveArray
+  namespace push
+  namespace local TM_FileSystem
+  set !temp_LPC #LPC
+  set #LPC 10000
+  set !ns_loc %1
+  set !ns_name %2
+  set !handle %3
+  set !var %4
+  set !start_index %5
+  set !end_index %6
+  set !sep 
+  if !handle = handle
+    set !handle __ , handle
+  set !ptr !handle , _ptr ; {userhandle}_ptr
+  set !handle_copy !handle
+  if ! . !ptr = N/A
+  {
+    set ! . !ptr 0 ; !{userhandle}_ptr (actual pointer)
+    set !handle_copy ! . !ptr
+    set !handle_copy !handle , !handle_copy
+    set ! . !handle_copy ; assume new variable
+  }
+  set !handle_copy ! . !ptr
+  set !handle_copy !handle , !handle_copy
+  for !i !start_index !end_index
+  {
+    if !ns_loc = local && !ns_name = std
+    {
+      set !newvar !var , !i
+      set !value % . !newvar
+    }
+    else
+    {
+      set !newvar !var , !i
+      namespace copy !newvar from !ns_loc !ns_name
+      set !value ! . !newvar
+    }
+    gosub TM_AddUnderscore !value ; must not have spaces in stored variables!!!
+    set ! . !handle_copy ! . !handle_copy , !ns_loc , !sep , !ns_name , !sep , !newvar , !sep , #RESULT , !sep
+    str len ! . !handle_copy
+    if #STRRES > 2000
+    {
+      set !len #STRRES
+      str left ! . !handle_copy 2000
+      set !temp #STRRES
+      str del ! . !handle_copy 1 2000
+      set ! . !handle_copy !temp
+      set ! . !ptr ! . !ptr + 1
+      set !handle_copy ! . !ptr
+      set !handle_copy !handle , !handle_copy
+      set ! . !handle_copy #STRRES
+    }
+  }
+  set !value
+  set !temp
+  set #LPC !temp_LPC
+  namespace pop
+  set !TM_Function_found #TRUE
+return
+;-------------------------------------------------------------------------------
+; %1 = file handle name
+; %2 = file name
+sub TM_FileSystem_SaveFile
+  namespace push
+  namespace local TM_FileSystem
+  set !temp_LPC #LPC
+  set #LPC 10000
+  set !LINE_LENGTH 2000 ; near DOS maximum
+  set !handle %1
+  set !filename %2
+  if !handle = handle
+    set !handle __ , handle
+  set !ptr !handle , _ptr ; {userhandle}_ptr
+  for !i 0 ! . !ptr
+  {
+    set !handle_copy !handle , !i
+    set !str ! . !handle_copy
+    if !i = 0
+      execute cmd.exe /c echo set , #spc , ! , fileout , !i ,  #spc , !str > !filename
+    else
+      execute cmd.exe /c echo set , #spc , ! , fileout , !i , #spc , !str >> !filename
+  }
+  set #LPC !temp_LPC
+  namespace pop
+  set !TM_Function_found #TRUE
+return
+;-------------------------------------------------------------------------------
+; %1 - file line variable
+sub TM_ReadVariables
+  set !temp %1
+  set !fileoutindex 0
+  set !fileout !fileout0
+  TM_ReadVariables_loop1:
+    gosub ReadItem ns_loc
+    if #RESULT = #TRUE
+      goto TM_ReadVariables_skip1
+    gosub ReadItem ns_name
+    if #RESULT = #TRUE
+      goto TM_ReadVariables_skip1
+    gosub ReadItem var
+    if #RESULT = #TRUE
+      goto TM_ReadVariables_skip1
+    gosub ReadItem value
+    if #RESULT = #TRUE
+      goto TM_ReadVariables_skip1
+
+    if !ns_loc in local_LOCAL && !ns_name in std_STD
+      set % . !var !value
+    else
+    {
+      set ! . !var !value
+      namespace copy !var to !ns_loc !ns_name
+    }
+    goto TM_ReadVariables_loop1
+
+  TM_ReadVariables_skip1:
+return
+;-------------------------------------------------------------------------------
+; Passes %fileout(n) as local, #RESULT
+sub ReadItem
+  str pos !fileout 
+  if #STRRES = 0
+  {
+    set !fileoutindex !fileoutindex + 1
+    if !fileout . !fileoutindex <> N/A
+    {
+      set !fileout !fileout , !fileout . !fileoutindex
+      str pos !fileout 
+    }
+    else
+    {
+      return #TRUE
+    }
+  }
+  set !len #STRRES - 1
+  str left !fileout !len
+  set ! . %1 #STRRES
+  set !len !len + 1
+  str del !fileout 1 !len
+  set !fileout #STRRES
+return #FALSE
+;-------------------------------------------------------------------------------
+; %2 - file name
+sub TM_FileSystem_LoadFile
+  namespace push
+  namespace local TM_FileSystem
+  set !lpc #LPC
+  set #LPC 10000
+  set !filename %1
+
+  while !fileout . !i <> N/A
+  {
+    set !fileout . !i N/A
+    set !i !i + 1
+  }
+
+  call !filename
+  if !fileout0 = N/A
+  {
+    set #LPC !lpc
+    namespace pop
+    set !TM_Function_found #TRUE
+    return #TRUE ; error
+  }
+
+  set !index 0
+  gosub TM_ReadVariables ; assumes namespace TM_FileSystem
+
+  set #LPC !lpc
+  namespace pop
+  set !TM_Function_found #TRUE
+return #FALSE
+;--------- EasyUO Menu Designer Code Begin ---------
+sub showEUOMenu1
+	menu Clear
+	menu Window Title TrailMyx's Application Framework %version
+	menu Window Color BtnFace
+	menu Window Size 387 318
+	menu Font Transparent #true
+	menu Font Align Right
+	menu Font Name MS Sans Serif
+	menu Font Size 8
+	menu Font Style
+	menu Font Color WindowText
+	menu Font BGColor Window
+	menu Edit EUOEditFilename 4 8 121 c:\test.txt
+	menu Font BGColor BtnFace
+	menu Button EUOButton1 200 8 75 25 EUOButton1
+	menu Font BGColor Window
+	menu Edit EUOStatus 8 292 369 Status , #spc , line
+	menu Show 421 270
+return
+;--------- EasyUO Menu Designer Code End ---------
+

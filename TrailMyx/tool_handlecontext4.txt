@@ -1,0 +1,236 @@
+gosub SetupContextValues  ; run this from script main initialization.
+
+;gosub HandleContextMenu NULL #CHARID %CONTEXT_Toggle_Monster_Title_Display
+;stop
+
+; Test code for setup
+gosub SetupContextValues
+set #TARGCURS 1
+repeat
+until #TARGCURS = 0
+gosub HandleContextMenu NULL #LTARGETID 0  ; always fails, but computes entire context menu
+stop
+
+
+;;;;;data
+;For pet context menu:
+;
+;Command: Kill = 3025036
+;Command: Follow = 2998872
+;Command: Guard = 3695576
+;Command: Stop = 3084560
+;Command: Stay = 3438018
+;Add Friend = 1757318
+;Remove Friend = 2870250
+;Transfer = 593758
+;Release = 753348
+;Open Backpack = 3428334
+;;;;
+;-------------------------------------------------------------------------------
+sub SetupContextValues
+; For #CHARID -------------------------------------------
+  set %CONTEXT_Open_Paperdoll 3156756
+  set %CONTEXT_Open_Backpack 3428334
+  set %CONTEXT_View_Quest_Log 3126406
+  set %CONTEXT_Quest_Conversation 3730488
+  set %CONTEXT_Cancel_Quest 1535584
+  set %CONTEXT_Toggle_Insurance 6427264
+  set %CONTEXT_Auto_Renew_Insurance 10565554
+  set %CONTEXT_Cancel_Renewing 8578676
+  set %CONTEXT_Toggle_Monster_Title_Display 6959492
+  set %CONTEXT_Toggle_Quest_Item 3603586
+  set %CONTEXT_Leave_House 2202616
+  set %CONTEXT_Totals 744812 ; alexandria
+; -------------------------------------------------------
+; Various commands:
+  set %CONTEXT_Buy 200250
+  set %CONTEXT_Sell 260988
+  set %CONTEXT_Open_Bankbox 2793788
+  set %CONTEXT_Talk 208296
+  set %CONTEXT_Stable_Pet 1059800
+  set %CONTEXT_Claim_All_Pets 3073470
+  set %CONTEXT_Ask_Destination 4153934
+  set %CONTEXT_Accept_Escort 2171844
+  set %CONTEXT_Command_Kill 3025036
+  set %CONTEXT_Command_Follow 2998872
+  set %CONTEXT_Command_Guard 3695576
+  set %CONTEXT_Command_Stop 3084560
+  set %CONTEXT_Command_Stay 3438018
+  set %CONTEXT_Add_Friend 1757318
+  set %CONTEXT_Remove_Friend 2870250
+  set %CONTEXT_Transfer 593758
+  set %CONTEXT_Release 753348
+  set %CONTEXT_Tame 2967380
+  set %CONTEXT_Hire 271802
+  set %CONTEXT_Lock_Karma 1628904
+  set %CONTEXT_Tithe_Gold 1504152
+  set %CONTEXT_Resurrect 1040922
+  set %CONTEXT_Add_To_Spellbook 4435612
+  
+; -------------------------------------------------------
+; Training commands:
+  set %CONTEXT_Train_Alchemy 2851050
+  set %CONTEXT_Train_Anatomy 2802984
+  set %CONTEXT_Train_Animal_Taming 4605822
+  set %CONTEXT_Train_Animal_Lore 3779370
+  set %CONTEXT_Train_Archery 2127964
+  set %CONTEXT_Train_Arms_Lore 2746638
+  set %CONTEXT_Train_Blacksmithy 5406112
+  set %CONTEXT_Train_Bowcraft_Fletching 9229098
+  set %CONTEXT_Train_Camping 3103050
+  set %CONTEXT_Train_Carpentry 3895634
+  set %CONTEXT_Train_Cartography 4174618
+  set %CONTEXT_Train_Chivalry 3031212
+  set %CONTEXT_Train_Cooking 2505550
+  set %CONTEXT_Train_Discordance 4510014
+  set %CONTEXT_Train_Evaluating_Intelligence 10255594
+  set %CONTEXT_Train_Fencing 2057938
+  set %CONTEXT_Train_Fishing 2129530
+  set %CONTEXT_Train_Focus 1736784
+  set %CONTEXT_Train_Forensic_Evaluation 9881992
+  set %CONTEXT_Train_Healing 2330106
+  set %CONTEXT_Train_Inscription 2652544
+  set %CONTEXT_Train_Item_Identification 10238832
+  set %CONTEXT_Train_Lockpicking 3681790
+  set %CONTEXT_Train_Lumberjacking 6315420
+  set %CONTEXT_Train_Mace_Fighting 5961428
+  set %CONTEXT_Train_Magery 2466304
+  set %CONTEXT_Train_Meditation 3901812
+  set %CONTEXT_Train_Mining 2019092
+  set %CONTEXT_Train_Musicianship 4167920
+  set %CONTEXT_Train_Necromancy 4205298
+  set %CONTEXT_Train_Parry 3108898
+  set %CONTEXT_Train_Peacemaking 4680400
+  set %CONTEXT_Train_Provocation 3850930
+  set %CONTEXT_Train_Resisting_Spells 6022522
+  set %CONTEXT_Train_Spirit_Speak 4945928
+  set %CONTEXT_Train_Swordsmanship 5601890
+  set %CONTEXT_Train_Tactics 1806400
+  set %CONTEXT_Train_Tailoring 2867278
+  set %CONTEXT_Train_Taste_Evaluation 6613220
+  set %CONTEXT_Train_Tinkering 2863750
+  set %CONTEXT_Train_Tracking 2572028
+  set %CONTEXT_Train_Veterinary 2777822
+  set %CONTEXT_Train_Wrestling 2967380
+  
+; -------------------------------------------------------
+; Treasure Key, Adv Boots
+  set %CONTEXT_Key_Open 371398
+  set %CONTEXT_Key_Add 245234
+  set %CONTEXT_Key_Refill 3764894
+
+; -------------------------------------------------------
+; Treasure Map
+  set %CONTEXT_TMap_Open 1571896
+  set %CONTEXT_TMap_Dig 3908004
+ 
+; -------------------------------------------------------
+; Treasure Chest
+  set %CONTEXT_TChest_Remove 2551696
+  
+return
+;-------------------------------------------------------------------------------
+; %1 = HandleContextMenu
+; %2 = #FINDID to manipulate
+; %3 = menu selection
+; returns #TRUE if entry not found, otherwise #FALSE for no error
+; stores computed values in !test1, !test2, !test3, etc for each menu selection.
+sub HandleContextMenu
+  namespace push
+  namespace local HCM
+  set !findid %2
+  set !menu_selection %3
+  set !x_offset 12
+  set !y_offset 12
+  set !select_height 18
+  set !y_gump_excess 24
+
+  exevent popup !findid
+  gosub GumpWait NULL normal_gump normal_gump
+  set #CONTPOSX 25
+  set #CONTPOSY 25
+  wait 10
+  str pos #CONTSIZE _
+  str del #CONTSIZE 1 #STRRES
+
+  set !gump_y #STRRES
+  set !number_of_selections ( ( !gump_y - !y_gump_excess ) / !select_height )
+  for !line_number 1 !number_of_selections
+  {
+    set !clickxposition1 #CONTPOSX + !x_offset
+    set !clickyposition1 #CONTPOSY + !y_offset + ( !select_height * ( !line_number - 1 ) )
+    set !clickxposition2 !clickxposition1 + 150
+    set !clickyposition2 !clickyposition1 + !select_height - 1
+    gosub NewSampleArea NULL !clickxposition1 !clickyposition1 !clickxposition2 !clickyposition2
+    set !test . !line_number #RESULT  ; stores values in !test1, !test2, .. !test . n.  Put in debug mode to gather these sampled values
+display !test . !line_number
+;    pause  ; include this pause to view sampled values.
+    if #RESULT = !menu_selection
+    {
+      click !clickxposition1 !clickyposition1 mc
+      namespace pop
+      return #FALSE ; no error, selection found
+    }
+  }
+;  pause
+  namespace clear
+  namespace pop
+return #TRUE
+;-------------------------------------------------------------------------------
+; %1 = NewSampleArea
+; %2 = x1coord
+; %3 = y1coord
+; %4 = x2coord
+; %5 = y2coord
+; %6 = return stamp
+sub NewSampleArea
+  namespace push
+  namespace local NSA2
+  set !temp_LPC #LPC
+  set #LPC 10000
+  set !stamp 0
+  set !x %2
+  set !blank_cnt 0
+  while !x <= %4
+  {
+    set !y %3
+    while !y <= %5
+    {
+      savepix !x !y 1
+      if #PIXCOL = 16777215
+      {
+        set !stamp ( !stamp + ( !x - %2 + 1 ) * 2048 + ( !y - %3 + 1 ) * 128 )
+        set !blank_cnt 0
+      }
+      else
+      {
+        set !stamp ( !stamp + ( !x - %2 ) * ( !y - %3 ) )
+      }
+      set !y !y + 2
+    }
+    set !blank_cnt !blank_cnt + 1
+    if !blank_cnt >= 10
+      goto NewSampleArea_skip1
+    set !x !x + 5 ; changing this will impact present sampled values!!
+  }
+NewSampleArea_skip1:
+  set #LPC !temp_LPC
+  set #RESULT !stamp
+  namespace pop
+return #RESULT
+;-------------------------------------------------------------------------------
+; %1 = GumpWait
+; %2 = Gumpname 1
+; %3 = Gumpname 2
+sub GumpWait
+  wait 10
+  set %timedelay #SCNT
+  GumpWait_loop1:
+    if #CONTNAME = %2 || #CONTNAME = %3
+      return
+    if #SCNT > %timedelay + 7
+      return
+    goto GumpWait_loop1
+return
+
+
